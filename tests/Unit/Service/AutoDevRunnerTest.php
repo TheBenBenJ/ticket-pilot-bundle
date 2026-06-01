@@ -6,11 +6,14 @@ namespace TheBenBenJ\TicketPilotBundle\Tests\Unit\Service;
 
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
+use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
 use TheBenBenJ\TicketPilotBundle\Contract\CodingAgentInterface;
 use TheBenBenJ\TicketPilotBundle\Contract\PromptBuilderInterface;
 use TheBenBenJ\TicketPilotBundle\Contract\QualityGateInterface;
 use TheBenBenJ\TicketPilotBundle\Contract\QualityReport;
 use TheBenBenJ\TicketPilotBundle\Contract\VcsProviderInterface;
+use TheBenBenJ\TicketPilotBundle\Event\TicketFailedEvent;
+use TheBenBenJ\TicketPilotBundle\Event\TicketProcessedEvent;
 use TheBenBenJ\TicketPilotBundle\Exception\QualityGateFailedException;
 use TheBenBenJ\TicketPilotBundle\Git\GitClient;
 use TheBenBenJ\TicketPilotBundle\Model\AgentResult;
@@ -105,7 +108,34 @@ final class AutoDevRunnerTest extends TestCase
             ->process($this->ticket(), 'cursor');
     }
 
-    private function runner(GitClient $git, VcsProviderInterface $vcs, ?QualityGateInterface $gate, AutoDevOptions $options): AutoDevRunner
+    public function testSuccessDispatchesTicketProcessedEvent(): void
+    {
+        $vcs = $this->createMock(VcsProviderInterface::class);
+        $vcs->method('createMergeRequest')->willReturn(new MergeRequest(1, 'https://mr/1'));
+
+        $dispatcher = $this->createMock(EventDispatcherInterface::class);
+        $dispatcher->expects(self::once())->method('dispatch')
+            ->with(self::isInstanceOf(TicketProcessedEvent::class))
+            ->willReturnArgument(0);
+
+        $this->runner($this->git(), $vcs, null, new AutoDevOptions(), $dispatcher)->process($this->ticket(), 'cursor');
+    }
+
+    public function testFailureDispatchesTicketFailedEvent(): void
+    {
+        $vcs = $this->createMock(VcsProviderInterface::class);
+        $vcs->method('createMergeRequest')->willThrowException(new \RuntimeException('boom'));
+
+        $dispatcher = $this->createMock(EventDispatcherInterface::class);
+        $dispatcher->expects(self::once())->method('dispatch')
+            ->with(self::isInstanceOf(TicketFailedEvent::class))
+            ->willReturnArgument(0);
+
+        $this->expectException(\RuntimeException::class);
+        $this->runner($this->git(), $vcs, $this->gate(true), new AutoDevOptions(), $dispatcher)->process($this->ticket(), 'cursor');
+    }
+
+    private function runner(GitClient $git, VcsProviderInterface $vcs, ?QualityGateInterface $gate, AutoDevOptions $options, ?EventDispatcherInterface $dispatcher = null): AutoDevRunner
     {
         $agent = $this->createStub(CodingAgentInterface::class);
         $agent->method('getName')->willReturn('cursor');
@@ -123,6 +153,7 @@ final class AutoDevRunnerTest extends TestCase
             $vcs,
             $options,
             $gate,
+            $dispatcher,
         );
     }
 

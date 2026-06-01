@@ -289,6 +289,7 @@ final class TicketPilotExtension extends Extension
             new Reference(VcsProviderInterface::class),
             $options,
             $config['quality']['enabled'] ? new Reference(QualityGateInterface::class) : null,
+            new Reference('event_dispatcher', ContainerBuilder::NULL_ON_INVALID_REFERENCE),
         ]));
 
         $this->registerCommand($container, AutoDevCommand::class, [

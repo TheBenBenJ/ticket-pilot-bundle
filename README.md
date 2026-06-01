@@ -223,6 +223,27 @@ final class LinearTicketSource implements TicketSourceInterface
 To customize the prompt, decorate the `PromptBuilderInterface` alias or replace
 `DefaultPromptBuilder`.
 
+### Events
+
+`AutoDevRunner` dispatches lifecycle events (when an event dispatcher is available) so you
+can notify, measure or trigger follow-ups without touching the core:
+
+| Event | When |
+|-------|------|
+| `TicketProcessedEvent` | a ticket was implemented and its MR/PR opened (carries the `AutoDevOutcome`) |
+| `TicketFailedEvent` | processing failed, after branch cleanup, before the error is rethrown |
+
+```php
+#[AsEventListener]
+final class NotifySlack
+{
+    public function __invoke(TicketProcessedEvent $event): void
+    {
+        // $event->ticket, $event->outcome->mergeRequest->url
+    }
+}
+```
+
 ## How it works
 
 ```

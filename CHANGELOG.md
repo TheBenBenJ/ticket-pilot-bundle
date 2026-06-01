@@ -30,6 +30,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Failure cleanup: when a run fails after the branch was created, `AutoDevRunner` deletes
   it (locally, and remotely if it had been pushed), controlled by `cleanup_branch_on_failure`
   (default true). No more orphan branches from failed attempts.
+- Lifecycle events: `AutoDevRunner` dispatches `TicketProcessedEvent` on success and
+  `TicketFailedEvent` on failure (when an event dispatcher is available) for observability
+  and extensibility. Adds a dependency on `symfony/event-dispatcher-contracts`.
 
 ### Security
 - Prompt-injection hardening: `DefaultPromptBuilder` now wraps attacker-controllable

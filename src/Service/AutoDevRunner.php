@@ -4,10 +4,13 @@ declare(strict_types=1);
 
 namespace TheBenBenJ\TicketPilotBundle\Service;
 
+use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
 use TheBenBenJ\TicketPilotBundle\Contract\PromptBuilderInterface;
 use TheBenBenJ\TicketPilotBundle\Contract\QualityGateInterface;
 use TheBenBenJ\TicketPilotBundle\Contract\QualityReport;
 use TheBenBenJ\TicketPilotBundle\Contract\VcsProviderInterface;
+use TheBenBenJ\TicketPilotBundle\Event\TicketFailedEvent;
+use TheBenBenJ\TicketPilotBundle\Event\TicketProcessedEvent;
 use TheBenBenJ\TicketPilotBundle\Exception\QualityGateFailedException;
 use TheBenBenJ\TicketPilotBundle\Git\GitClient;
 use TheBenBenJ\TicketPilotBundle\Model\Ticket;
@@ -23,7 +26,8 @@ use TheBenBenJ\TicketPilotBundle\Registry\AgentRegistry;
 final class AutoDevRunner
 {
     /**
-     * @param QualityGateInterface|null $qualityGate When set, runs after the agent and before push
+     * @param QualityGateInterface|null     $qualityGate When set, runs after the agent and before push
+     * @param EventDispatcherInterface|null $dispatcher  When set, emits TicketProcessedEvent / TicketFailedEvent
      */
     public function __construct(
         private readonly AgentRegistry $agents,
@@ -34,6 +38,7 @@ final class AutoDevRunner
         private readonly VcsProviderInterface $vcs,
         private readonly AutoDevOptions $options = new AutoDevOptions(),
         private readonly ?QualityGateInterface $qualityGate = null,
+        private readonly ?EventDispatcherInterface $dispatcher = null,
     ) {
     }
 
@@ -86,7 +91,10 @@ final class AutoDevRunner
                 $draft,
             );
 
-            return new AutoDevOutcome($ticket->key, $plan, $mergeRequest);
+            $outcome = new AutoDevOutcome($ticket->key, $plan, $mergeRequest);
+            $this->dispatcher?->dispatch(new TicketProcessedEvent($ticket, $outcome));
+
+            return $outcome;
         } catch (\Throwable $e) {
             if ($this->options->cleanupOnFailure) {
                 if ($pushed) {
@@ -94,6 +102,8 @@ final class AutoDevRunner
                 }
                 $this->git->deleteLocalBranch($plan->branch, $plan->base);
             }
+
+            $this->dispatcher?->dispatch(new TicketFailedEvent($ticket, $e));
 
             throw $e;
         }
