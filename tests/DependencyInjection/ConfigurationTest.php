@@ -26,6 +26,7 @@ final class ConfigurationTest extends TestCase
         self::assertSame('abort', $config['quality']['on_failure']);
         self::assertTrue($config['cleanup_branch_on_failure']);
         self::assertSame([], $config['security']['trusted_reporters']);
+        self::assertSame(3, $config['http']['max_retries']);
     }
 
     public function testInvalidQualityOnFailurePolicyIsRejected(): void

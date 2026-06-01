@@ -38,8 +38,18 @@ final class Configuration implements ConfigurationInterface
         $this->addQualitySection($root);
         $this->addCommitSection($root);
         $this->addSecuritySection($root);
+        $this->addHttpSection($root);
 
         return $treeBuilder;
+    }
+
+    private function addHttpSection(\Symfony\Component\Config\Definition\Builder\ArrayNodeDefinition $root): void
+    {
+        $root->children()->arrayNode('http')->addDefaultsIfNotSet()->children()
+            ->integerNode('max_retries')->defaultValue(3)->min(0)
+                ->info('Retries for transient API failures (timeouts, 5xx, 429). 0 disables retrying.')
+            ->end()
+        ->end()->end();
     }
 
     private function addSecuritySection(\Symfony\Component\Config\Definition\Builder\ArrayNodeDefinition $root): void

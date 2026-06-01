@@ -38,6 +38,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   vocabulary (it maps to the GitLab MR iid and the GitHub PR number).
 - Added a Symfony Flex recipe (under `recipe/`) ready to submit to `symfony/recipes-contrib`:
   registers the bundle, copies a starter config and seeds `TICKET_PILOT_*` env vars.
+- HTTP resilience: the Jira/Sentry/GitHub/GitLab clients are wrapped in Symfony's
+  `RetryableHttpClient`, retrying transient failures (timeouts, 5xx, 429).
+  Configurable via `http.max_retries` (default 3; 0 disables).
 
 ### Security
 - Prompt-injection hardening: `DefaultPromptBuilder` now wraps attacker-controllable

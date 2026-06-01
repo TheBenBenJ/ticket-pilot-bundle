@@ -11,6 +11,7 @@ use Symfony\Component\DependencyInjection\ContainerBuilder;
 use Symfony\Component\DependencyInjection\Definition;
 use Symfony\Component\DependencyInjection\Extension\Extension;
 use Symfony\Component\DependencyInjection\Reference;
+use Symfony\Component\HttpClient\RetryableHttpClient;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
 use TheBenBenJ\TicketPilotBundle\Agent\ClaudeAgent;
 use TheBenBenJ\TicketPilotBundle\Agent\CursorAgent;
@@ -51,7 +52,7 @@ final class TicketPilotExtension extends Extension
 
         $projectDir = $config['project_dir'];
         $logger = new Reference(LoggerInterface::class, ContainerBuilder::NULL_ON_INVALID_REFERENCE);
-        $httpClient = new Reference(HttpClientInterface::class);
+        $httpClient = $this->httpClient($config, $logger);
 
         $this->registerCoreServices($container, $config, $projectDir, $logger);
         $this->registerSources($container, $config, $httpClient, $logger);
@@ -64,6 +65,24 @@ final class TicketPilotExtension extends Extension
     public function getAlias(): string
     {
         return 'ticket_pilot';
+    }
+
+    /**
+     * The HTTP client used by the API integrations, optionally wrapped in a
+     * RetryableHttpClient so transient failures (timeouts, 5xx, 429) are retried.
+     *
+     * @param array<string, mixed> $config
+     */
+    private function httpClient(array $config, Reference $logger): Reference|Definition
+    {
+        $client = new Reference(HttpClientInterface::class);
+        $maxRetries = $config['http']['max_retries'];
+
+        if ($maxRetries < 1) {
+            return $client;
+        }
+
+        return new Definition(RetryableHttpClient::class, [$client, null, $maxRetries, $logger]);
     }
 
     /**
@@ -121,7 +140,7 @@ final class TicketPilotExtension extends Extension
     /**
      * @param array<string, mixed> $config
      */
-    private function registerSources(ContainerBuilder $container, array $config, Reference $httpClient, Reference $logger): void
+    private function registerSources(ContainerBuilder $container, array $config, Reference|Definition $httpClient, Reference $logger): void
     {
         $jira = $config['sources']['jira'];
         if ($jira['enabled']) {
@@ -196,7 +215,7 @@ final class TicketPilotExtension extends Extension
      *
      * @return bool whether a VCS provider was registered
      */
-    private function registerVcs(ContainerBuilder $container, array $config, Reference $httpClient, Reference $logger): bool
+    private function registerVcs(ContainerBuilder $container, array $config, Reference|Definition $httpClient, Reference $logger): bool
     {
         $gitlab = $config['vcs']['gitlab'];
         $github = $config['vcs']['github'];
