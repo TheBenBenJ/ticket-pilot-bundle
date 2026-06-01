@@ -126,6 +126,11 @@ ticket_pilot:
             - config/packages/ticket_pilot.yaml
             - .env
             - .gitlab-ci.yml
+
+    security:
+        # When non-empty, auto-pickup (no --ticket) only processes tickets whose
+        # reporter is listed — mitigates ticket-driven prompt injection.
+        trusted_reporters: ['alice@example.com', 'bob@example.com']
 ```
 
 Full reference:
@@ -236,6 +241,15 @@ TicketSource ─► BranchPlanner ─► GitClient.createBranch
 
 `AutoDevRunner` is the reusable, side-effecting core; the console commands and the
 HTTP controller are thin layers on top of it.
+
+## Security
+
+The agent edits your repo and pushes with a write token, and its prompt is built from
+**attacker-controllable** ticket text — so **prompt injection** is the headline risk.
+The bundle mitigates it (untrusted-data fencing in the prompt, a `trusted_reporters`
+allowlist on auto-pickup, draft MRs, a quality gate, commit exclude-paths), but you must
+run it in a **disposable, isolated environment** with a **minimally-scoped token** and
+**human review** of every MR. Read [SECURITY.md](SECURITY.md) before production use.
 
 ## Testing
 

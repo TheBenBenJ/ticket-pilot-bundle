@@ -28,6 +28,7 @@ use TheBenBenJ\TicketPilotBundle\Prompt\DefaultPromptBuilder;
 use TheBenBenJ\TicketPilotBundle\Quality\CommandQualityGate;
 use TheBenBenJ\TicketPilotBundle\Registry\AgentRegistry;
 use TheBenBenJ\TicketPilotBundle\Registry\TicketSourceRegistry;
+use TheBenBenJ\TicketPilotBundle\Security\TicketGuard;
 use TheBenBenJ\TicketPilotBundle\Service\AutoDevOptions;
 use TheBenBenJ\TicketPilotBundle\Service\AutoDevRunner;
 use TheBenBenJ\TicketPilotBundle\Service\BranchPlanner;
@@ -81,6 +82,10 @@ final class TicketPilotExtension extends Extension
         $container->setDefinition(AgentRegistry::class, $agentRegistry);
 
         $container->setDefinition(GitClient::class, new Definition(GitClient::class, [$projectDir]));
+
+        $container->setDefinition(TicketGuard::class, new Definition(TicketGuard::class, [
+            $config['security']['trusted_reporters'],
+        ]));
 
         $prompt = $config['prompt'];
         $container->setDefinition(DefaultPromptBuilder::class, new Definition(DefaultPromptBuilder::class, [
@@ -290,6 +295,7 @@ final class TicketPilotExtension extends Extension
             new Reference(AgentRegistry::class),
             new Reference(BranchPlanner::class),
             new Reference(AutoDevRunner::class),
+            new Reference(TicketGuard::class),
             '%ticket_pilot.default_source%',
             '%ticket_pilot.default_agent%',
         ]);

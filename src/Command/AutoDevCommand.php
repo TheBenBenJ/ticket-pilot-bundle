@@ -12,6 +12,7 @@ use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Style\SymfonyStyle;
 use TheBenBenJ\TicketPilotBundle\Registry\AgentRegistry;
 use TheBenBenJ\TicketPilotBundle\Registry\TicketSourceRegistry;
+use TheBenBenJ\TicketPilotBundle\Security\TicketGuard;
 use TheBenBenJ\TicketPilotBundle\Service\AutoDevRunner;
 use TheBenBenJ\TicketPilotBundle\Service\BranchPlanner;
 
@@ -30,6 +31,7 @@ final class AutoDevCommand extends Command
         private readonly AgentRegistry $agents,
         private readonly BranchPlanner $branchPlanner,
         private readonly AutoDevRunner $runner,
+        private readonly TicketGuard $ticketGuard,
         private readonly string $defaultSource,
         private readonly string $defaultAgent,
     ) {
@@ -70,8 +72,10 @@ final class AutoDevCommand extends Command
 
         $source = $this->sources->get($sourceName);
 
+        $explicitTicket = null !== $input->getOption('ticket');
+
         try {
-            if (null !== $input->getOption('ticket')) {
+            if ($explicitTicket) {
                 $tickets = [$source->fetchOne((string) $input->getOption('ticket'))];
             } else {
                 $tickets = $source->fetchPending((int) $input->getOption('limit'));
@@ -80,6 +84,17 @@ final class AutoDevCommand extends Command
             $io->error($e->getMessage());
 
             return Command::FAILURE;
+        }
+
+        // The auto-pickup path is exposed to anyone who can file/label a ticket, so it is
+        // gated by the trusted-reporters allowlist. An explicit --ticket is a human action.
+        if (!$explicitTicket && $this->ticketGuard->isRestricted()) {
+            $kept = array_values(array_filter($tickets, fn ($ticket): bool => $this->ticketGuard->isTrusted($ticket)));
+            $skipped = \count($tickets) - \count($kept);
+            if ($skipped > 0) {
+                $io->note(\sprintf('%d ticket(s) skipped: reporter not in security.trusted_reporters.', $skipped));
+            }
+            $tickets = $kept;
         }
 
         if ([] === $tickets) {

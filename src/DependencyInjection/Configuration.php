@@ -34,8 +34,20 @@ final class Configuration implements ConfigurationInterface
         $this->addMergeRequestSection($root);
         $this->addQualitySection($root);
         $this->addCommitSection($root);
+        $this->addSecuritySection($root);
 
         return $treeBuilder;
+    }
+
+    private function addSecuritySection(\Symfony\Component\Config\Definition\Builder\ArrayNodeDefinition $root): void
+    {
+        $root->children()->arrayNode('security')->addDefaultsIfNotSet()->children()
+            ->arrayNode('trusted_reporters')
+                ->scalarPrototype()->end()
+                ->info('When non-empty, auto-pickup (no --ticket) only processes tickets whose reporter is listed. Mitigates ticket-driven prompt injection.')
+                ->defaultValue([])
+            ->end()
+        ->end()->end();
     }
 
     private function addSourcesSection(\Symfony\Component\Config\Definition\Builder\ArrayNodeDefinition $root): void
