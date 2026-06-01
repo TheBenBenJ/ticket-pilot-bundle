@@ -24,6 +24,8 @@ final class ConfigurationTest extends TestCase
         self::assertSame('[{key}] {title}', $config['merge_request']['commit_message_template']);
         self::assertFalse($config['merge_request']['draft']);
         self::assertSame('abort', $config['quality']['on_failure']);
+        self::assertTrue($config['cleanup_branch_on_failure']);
+        self::assertSame([], $config['security']['trusted_reporters']);
     }
 
     public function testInvalidQualityOnFailurePolicyIsRejected(): void

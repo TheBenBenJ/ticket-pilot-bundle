@@ -24,15 +24,44 @@ use TheBenBenJ\TicketPilotBundle\Service\MergeRequestFactory;
 
 final class AutoDevRunnerTest extends TestCase
 {
-    public function testFailingQualityGateWithAbortPolicyOpensNoMergeRequest(): void
+    public function testFailingQualityGateWithAbortPolicyOpensNoMergeRequestAndCleansUp(): void
     {
         $git = $this->git();
         $git->expects(self::never())->method('commitAndPush');
+        $git->expects(self::once())->method('deleteLocalBranch');
+        $git->expects(self::never())->method('deleteRemoteBranch'); // never pushed
 
         $vcs = $this->createMock(VcsProviderInterface::class);
         $vcs->expects(self::never())->method('createMergeRequest');
 
         $runner = $this->runner($git, $vcs, $this->gate(false), new AutoDevOptions(onQualityFailure: 'abort'));
+
+        $this->expectException(QualityGateFailedException::class);
+        $runner->process($this->ticket(), 'cursor');
+    }
+
+    public function testMergeRequestFailureDeletesPushedBranch(): void
+    {
+        $git = $this->git();
+        $git->expects(self::once())->method('deleteRemoteBranch'); // pushed before the MR failed
+        $git->expects(self::once())->method('deleteLocalBranch');
+
+        $vcs = $this->createMock(VcsProviderInterface::class);
+        $vcs->method('createMergeRequest')->willThrowException(new \RuntimeException('boom'));
+
+        $this->expectException(\RuntimeException::class);
+        $this->runner($git, $vcs, $this->gate(true), new AutoDevOptions())->process($this->ticket(), 'cursor');
+    }
+
+    public function testCleanupCanBeDisabled(): void
+    {
+        $git = $this->git();
+        $git->expects(self::never())->method('deleteLocalBranch');
+        $git->expects(self::never())->method('deleteRemoteBranch');
+
+        $vcs = $this->createMock(VcsProviderInterface::class);
+
+        $runner = $this->runner($git, $vcs, $this->gate(false), new AutoDevOptions(onQualityFailure: 'abort', cleanupOnFailure: false));
 
         $this->expectException(QualityGateFailedException::class);
         $runner->process($this->ticket(), 'cursor');

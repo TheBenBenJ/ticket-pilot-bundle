@@ -23,6 +23,9 @@ final class Configuration implements ConfigurationInterface
                 ->scalarNode('default_source')->defaultValue('jira')->end()
                 ->scalarNode('default_agent')->defaultValue('cursor')->end()
                 ->integerNode('agent_timeout')->defaultValue(3600)->min(1)->end()
+                ->booleanNode('cleanup_branch_on_failure')->defaultTrue()
+                    ->info('Delete the ticket branch (local, and remote if pushed) when a run fails.')
+                ->end()
             ->end()
         ;
 

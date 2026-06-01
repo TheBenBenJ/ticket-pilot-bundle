@@ -52,6 +52,24 @@ class GitClient
     }
 
     /**
+     * Best-effort deletion of a local branch: checks out the fallback branch first,
+     * then force-deletes the branch. Never throws (used during failure cleanup).
+     */
+    public function deleteLocalBranch(string $branch, string $fallbackBranch): void
+    {
+        $this->process(['checkout', $fallbackBranch], 30)->run();
+        $this->process(['branch', '-D', $branch], 30)->run();
+    }
+
+    /**
+     * Best-effort deletion of a remote branch. Never throws (used during failure cleanup).
+     */
+    public function deleteRemoteBranch(string $branch): void
+    {
+        $this->process(['push', 'origin', '--delete', $branch], 60)->run();
+    }
+
+    /**
      * Stages every change, un-stages the excluded paths, commits and pushes.
      *
      * @param list<string> $excludePaths Paths the agent must never commit (infra, the bundle itself, secrets)

@@ -19,11 +19,14 @@ final readonly class AutoDevOptions
      * @param string       $onQualityFailure Policy when the quality gate fails: "abort" (no push,
      *                                       no MR) or "draft" (push and open a draft MR flagged
      *                                       with the failing checks)
+     * @param bool         $cleanupOnFailure Delete the branch created for the ticket (locally, and
+     *                                       remotely if it was pushed) when the run fails
      */
     public function __construct(
         public array $excludePaths = [],
         public bool $draft = false,
         public string $onQualityFailure = self::ON_QUALITY_FAILURE_ABORT,
+        public bool $cleanupOnFailure = true,
     ) {
     }
 

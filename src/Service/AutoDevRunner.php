@@ -61,28 +61,42 @@ final class AutoDevRunner
 
         $this->git->createBranch($plan->branch, $plan->base);
 
-        $prompt = $this->promptBuilder->build($ticket);
-        $result = $agent->run($prompt, $model, $onOutput);
+        $pushed = false;
 
-        $qualityFailure = $this->runQualityGate();
+        try {
+            $prompt = $this->promptBuilder->build($ticket);
+            $result = $agent->run($prompt, $model, $onOutput);
 
-        $this->git->commitAndPush(
-            $plan->branch,
-            $this->mergeRequestFactory->commitMessage($ticket),
-            $this->options->excludePaths,
-        );
+            $qualityFailure = $this->runQualityGate();
 
-        $draft = $this->options->draft || null !== $qualityFailure;
+            $this->git->commitAndPush(
+                $plan->branch,
+                $this->mergeRequestFactory->commitMessage($ticket),
+                $this->options->excludePaths,
+            );
+            $pushed = true;
 
-        $mergeRequest = $this->vcs->createMergeRequest(
-            $plan->branch,
-            $plan->base,
-            $this->mergeRequestFactory->title($ticket),
-            $this->mergeRequestFactory->description($ticket, $result->output, $qualityFailure),
-            $draft,
-        );
+            $draft = $this->options->draft || null !== $qualityFailure;
 
-        return new AutoDevOutcome($ticket->key, $plan, $mergeRequest);
+            $mergeRequest = $this->vcs->createMergeRequest(
+                $plan->branch,
+                $plan->base,
+                $this->mergeRequestFactory->title($ticket),
+                $this->mergeRequestFactory->description($ticket, $result->output, $qualityFailure),
+                $draft,
+            );
+
+            return new AutoDevOutcome($ticket->key, $plan, $mergeRequest);
+        } catch (\Throwable $e) {
+            if ($this->options->cleanupOnFailure) {
+                if ($pushed) {
+                    $this->git->deleteRemoteBranch($plan->branch);
+                }
+                $this->git->deleteLocalBranch($plan->branch, $plan->base);
+            }
+
+            throw $e;
+        }
     }
 
     /**

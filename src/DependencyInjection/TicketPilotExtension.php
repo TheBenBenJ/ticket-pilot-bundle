@@ -277,6 +277,7 @@ final class TicketPilotExtension extends Extension
             $config['commit']['exclude_paths'],
             $config['merge_request']['draft'],
             $config['quality']['on_failure'],
+            $config['cleanup_branch_on_failure'],
         ]);
 
         $container->setDefinition(AutoDevRunner::class, new Definition(AutoDevRunner::class, [
