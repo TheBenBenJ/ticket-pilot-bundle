@@ -5,14 +5,16 @@ declare(strict_types=1);
 namespace TheBenBenJ\TicketPilotBundle\Service;
 
 use TheBenBenJ\TicketPilotBundle\Contract\PromptBuilderInterface;
+use TheBenBenJ\TicketPilotBundle\Contract\QualityGateInterface;
 use TheBenBenJ\TicketPilotBundle\Contract\VcsProviderInterface;
+use TheBenBenJ\TicketPilotBundle\Exception\QualityGateFailedException;
 use TheBenBenJ\TicketPilotBundle\Git\GitClient;
 use TheBenBenJ\TicketPilotBundle\Model\Ticket;
 use TheBenBenJ\TicketPilotBundle\Registry\AgentRegistry;
 
 /**
  * Orchestrates the end-to-end pipeline for a single ticket:
- * plan branch → create branch → run agent → commit & push → open merge request.
+ * plan branch → create branch → run agent → quality gate → commit & push → open merge request.
  *
  * The fetching of tickets and the iteration strategy live in the command layer;
  * this service is the reusable, side-effecting core.
@@ -20,7 +22,9 @@ use TheBenBenJ\TicketPilotBundle\Registry\AgentRegistry;
 final class AutoDevRunner
 {
     /**
-     * @param list<string> $excludePaths Paths the agent's commit must never include
+     * @param list<string>              $excludePaths Paths the agent's commit must never include
+     * @param QualityGateInterface|null $qualityGate  When set, runs after the agent and before
+     *                                                push; a failure aborts (no commit, no MR)
      */
     public function __construct(
         private readonly AgentRegistry $agents,
@@ -30,13 +34,15 @@ final class AutoDevRunner
         private readonly GitClient $git,
         private readonly VcsProviderInterface $vcs,
         private readonly array $excludePaths = [],
+        private readonly ?QualityGateInterface $qualityGate = null,
     ) {
     }
 
     /**
      * @param callable(string):void|null $onOutput Streamed agent-output callback
      *
-     * @throws \RuntimeException when the branch already exists or any step fails
+     * @throws QualityGateFailedException when the quality gate does not pass
+     * @throws \RuntimeException          when the branch already exists or any step fails
      */
     public function process(
         Ticket $ticket,
@@ -58,6 +64,13 @@ final class AutoDevRunner
 
         $prompt = $this->promptBuilder->build($ticket);
         $result = $agent->run($prompt, $model, $onOutput);
+
+        if (null !== $this->qualityGate) {
+            $report = $this->qualityGate->verify();
+            if (!$report->passed) {
+                throw new QualityGateFailedException($report);
+            }
+        }
 
         $this->git->commitAndPush(
             $plan->branch,

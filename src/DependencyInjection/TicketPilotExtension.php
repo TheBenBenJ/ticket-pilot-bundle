@@ -275,6 +275,7 @@ final class TicketPilotExtension extends Extension
             new Reference(GitClient::class),
             new Reference(VcsProviderInterface::class),
             $config['commit']['exclude_paths'],
+            $config['quality']['enabled'] ? new Reference(QualityGateInterface::class) : null,
         ]));
 
         $this->registerCommand($container, AutoDevCommand::class, [

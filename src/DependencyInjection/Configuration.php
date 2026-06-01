@@ -99,7 +99,7 @@ final class Configuration implements ConfigurationInterface
                 ->scalarNode('repository')->isRequired()->cannotBeEmpty()
                     ->info('Repository in "owner/repo" form.')
                 ->end()
-                ->scalarNode('dispatch_event_type')->defaultValue('ia-auto-dev')
+                ->scalarNode('dispatch_event_type')->defaultValue('ticket-pilot')
                     ->info('repository_dispatch event_type a GitHub Actions workflow reacts to.')
                 ->end()
                 ->scalarNode('pipeline_ref')->defaultValue('main')

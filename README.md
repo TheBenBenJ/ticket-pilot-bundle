@@ -1,4 +1,4 @@
-# IA Auto-Dev Bundle
+# Ticket Pilot Bundle
 
 [![CI](https://github.com/thebenbenj/ticket-pilot-bundle/actions/workflows/ci.yml/badge.svg)](https://github.com/thebenbenj/ticket-pilot-bundle/actions/workflows/ci.yml)
 [![Latest Stable Version](https://img.shields.io/packagist/v/thebenbenj/ticket-pilot-bundle)](https://packagist.org/packages/thebenbenj/ticket-pilot-bundle)
@@ -87,7 +87,7 @@ ticket_pilot:
             # base_uri: 'https://<host>/api/v3'        # for GitHub Enterprise Server
             token: '%env(GITHUB_TOKEN)%'
             repository: '%env(GITHUB_REPOSITORY)%'       # "owner/repo"
-            dispatch_event_type: 'ia-auto-dev'           # repository_dispatch event
+            dispatch_event_type: 'ticket-pilot'          # repository_dispatch event
             pipeline_ref: 'main'
 
     agents:
@@ -109,6 +109,14 @@ ticket_pilot:
         hotfix_base: main
         release_branch_pattern: 'release/RC-{version}'   # {version} = ticket fix version
         bug_types: ['bug', 'anomalie', 'defect']
+
+    # When enabled, these commands run AFTER the agent and BEFORE push.
+    # If they fail, the run aborts: nothing is pushed and no merge request is opened.
+    quality:
+        enabled: true
+        commands:
+            check: ['make', 'check']
+            test: ['make', 'test']
 
     commit:
         exclude_paths:
@@ -160,10 +168,10 @@ With **GitLab** this calls the pipelines API; with **GitHub** it sends a
 auto-dev variables as `client_payload`. A workflow then runs the command:
 
 ```yaml
-# .github/workflows/ia-auto-dev.yml
+# .github/workflows/ticket-pilot.yml
 on:
   repository_dispatch:
-    types: [ia-auto-dev]
+    types: [ticket-pilot]
 jobs:
   auto-dev:
     runs-on: ubuntu-latest
@@ -214,7 +222,9 @@ TicketSource ─► BranchPlanner ─► GitClient.createBranch
                                        │
                                  PromptBuilder
                                        │
-                                  CodingAgent.run   (edits the working tree)
+                                  CodingAgent.run        (edits the working tree)
+                                       │
+                                 QualityGate.verify      (optional — abort on failure)
                                        │
                               GitClient.commitAndPush
                                        │
