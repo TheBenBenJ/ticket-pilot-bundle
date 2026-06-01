@@ -1,0 +1,238 @@
+# IA Auto-Dev Bundle
+
+[![CI](https://github.com/thebenbenj/ticket-pilot-bundle/actions/workflows/ci.yml/badge.svg)](https://github.com/thebenbenj/ticket-pilot-bundle/actions/workflows/ci.yml)
+[![Latest Stable Version](https://img.shields.io/packagist/v/thebenbenj/ticket-pilot-bundle)](https://packagist.org/packages/thebenbenj/ticket-pilot-bundle)
+[![License](https://img.shields.io/packagist/l/thebenbenj/ticket-pilot-bundle)](LICENSE)
+
+A Symfony bundle that turns **tickets** (Jira, Sentry, GitHub Issues, …) into
+**merge / pull requests** on your **VCS host** (GitLab, GitHub, …) by driving an
+autonomous **coding agent** (Cursor CLI, Claude Code, …) — fetch a ticket, create
+the right branch, run the agent against the working tree, commit, push and open
+the merge/pull request.
+
+Everything is built around small interfaces, so you can plug in your own ticket
+source, VCS provider, coding agent or prompt without touching the core.
+
+> ⚠️ The bundle runs a coding agent that **writes to your repository and pushes
+> branches**. Run it in CI or a disposable working copy, never against an
+> environment you cannot throw away.
+
+## Requirements
+
+- PHP ≥ 8.2
+- Symfony 6.4 LTS or 7.x
+- `symfony/http-client` (for the bundled Jira / Sentry / GitHub / GitLab integrations)
+- A git binary and the CLI of the agent you enable (`agent` for Cursor, `claude`
+  for Claude Code) available in the runtime that executes the pipeline
+
+## Installation
+
+```bash
+composer require thebenbenj/ticket-pilot-bundle
+```
+
+If you do not use Symfony Flex, enable the bundle manually:
+
+```php
+// config/bundles.php
+return [
+    // ...
+    TheBenBenJ\TicketPilotBundle\TicketPilotBundle::class => ['all' => true],
+];
+```
+
+## Configuration
+
+Create `config/packages/ticket_pilot.yaml`. Sources, the VCS provider and the
+quality gate are **opt-in**; agents are on by default. Use environment variables
+for every secret.
+
+```yaml
+ticket_pilot:
+    default_source: jira
+    default_agent: claude
+
+    sources:
+        jira:
+            enabled: true
+            base_uri: '%env(JIRA_URL)%'
+            email: '%env(JIRA_EMAIL)%'
+            token: '%env(JIRA_TOKEN)%'
+            project: '%env(JIRA_PROJECT)%'
+            pending_label: 'IA'          # JQL label that flags a ticket as ready
+            pending_status: 'To Do'      # JQL status of pending tickets
+        sentry:
+            enabled: true
+            base_uri: '%env(SENTRY_URL)%'
+            token: '%env(SENTRY_TOKEN)%'
+            organization: '%env(SENTRY_ORG)%'
+            project: '%env(SENTRY_PROJECT)%'
+        github:
+            enabled: false               # GitHub Issues as a ticket source
+            token: '%env(GITHUB_TOKEN)%'
+            repository: '%env(GITHUB_REPOSITORY)%'   # "owner/repo"
+            pending_label: 'ia'          # open issues with this label are pending
+            bug_label: 'bug'             # issues with this label use the hotfix flow
+
+    # Enable EXACTLY ONE VCS provider (gitlab or github).
+    vcs:
+        gitlab:
+            enabled: true
+            base_uri: '%env(GITLAB_URL)%'
+            token: '%env(GITLAB_TOKEN)%'
+            project_path: '%env(GITLAB_PROJECT_PATH)%'   # e.g. "group/project"
+            pipeline_ref: 'main'
+        github:
+            enabled: false
+            # base_uri: 'https://<host>/api/v3'        # for GitHub Enterprise Server
+            token: '%env(GITHUB_TOKEN)%'
+            repository: '%env(GITHUB_REPOSITORY)%'       # "owner/repo"
+            dispatch_event_type: 'ia-auto-dev'           # repository_dispatch event
+            pipeline_ref: 'main'
+
+    agents:
+        cursor:
+            binary: agent
+        claude:
+            binary: claude
+            skip_permissions: true
+
+    prompt:
+        language: 'English'
+        quality_commands: ['make check', 'make test']
+        extra_instructions: |
+            Follow the conventions in CLAUDE.md.
+            Never run destructive database or build commands.
+
+    branching:
+        feature_base: develop
+        hotfix_base: main
+        release_branch_pattern: 'release/RC-{version}'   # {version} = ticket fix version
+        bug_types: ['bug', 'anomalie', 'defect']
+
+    commit:
+        exclude_paths:
+            - config/packages/ticket_pilot.yaml
+            - .env
+            - .gitlab-ci.yml
+```
+
+Full reference:
+
+```bash
+php bin/console config:dump-reference ticket_pilot
+```
+
+## Usage
+
+```bash
+# List the pending tickets of a source
+php bin/console ia:tickets:list --source=jira
+
+# Print the prompt that would be sent to the agent (debugging)
+php bin/console ia:prompt --ticket=PROJ-1234
+
+# Full run: branch, agent, commit, push, merge request
+php bin/console ia:auto-dev --ticket=PROJ-1234 --agent=claude
+php bin/console ia:auto-dev --source=sentry --limit=3      # batch from a source
+php bin/console ia:auto-dev --dry-run                       # preview only
+```
+
+### HTTP trigger (optional)
+
+When a VCS provider exposing pipelines is enabled, you can trigger a CI pipeline
+over HTTP. Import the route:
+
+```yaml
+# config/routes/ticket_pilot.yaml
+ticket_pilot:
+    resource: '@TicketPilotBundle/Resources/config/routes.php'
+```
+
+```
+GET /ia/auto-dev?ticket=PROJ-1234&source=jira&agent=claude
+```
+
+> Protect this route with your firewall — it starts a pipeline.
+
+With **GitLab** this calls the pipelines API; with **GitHub** it sends a
+`repository_dispatch` event (the configured `dispatch_event_type`) carrying the
+auto-dev variables as `client_payload`. A workflow then runs the command:
+
+```yaml
+# .github/workflows/ia-auto-dev.yml
+on:
+  repository_dispatch:
+    types: [ia-auto-dev]
+jobs:
+  auto-dev:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - run: php bin/console ia:auto-dev
+              --ticket="${{ github.event.client_payload.IA_TICKET }}"
+              --source="${{ github.event.client_payload.IA_SOURCE }}"
+              --agent="${{ github.event.client_payload.IA_AGENT }}"
+```
+
+## Extending
+
+Jira, Sentry and GitHub Issues sources, GitLab and GitHub providers, and the
+Cursor and Claude agents ship with the bundle. To add your own, register a
+service implementing one of the contracts and tag it; the registries pick it up
+automatically.
+
+```php
+use TheBenBenJ\TicketPilotBundle\Contract\TicketSourceInterface;
+
+#[AutoconfigureTag('ticket_pilot.ticket_source')]
+final class LinearTicketSource implements TicketSourceInterface
+{
+    public function getName(): string { return 'linear'; }
+    public function fetchPending(int $limit = 1): array { /* ... */ }
+    public function fetchOne(string $key): \TheBenBenJ\TicketPilotBundle\Model\Ticket { /* ... */ }
+}
+```
+
+| Contract | Bundled | Purpose | Tag |
+|----------|---------|---------|-----|
+| `TicketSourceInterface` | Jira, Sentry, GitHub Issues | Provide tickets | `ticket_pilot.ticket_source` |
+| `CodingAgentInterface` | Cursor, Claude Code | Drive a coding agent | `ticket_pilot.agent` |
+| `VcsProviderInterface` | GitLab, GitHub | Open merge/pull requests | — (aliased) |
+| `PipelineTriggerInterface` | GitLab, GitHub | Trigger a CI pipeline | — (aliased) |
+| `PromptBuilderInterface` | `DefaultPromptBuilder` | Build the agent prompt | — (decorate it) |
+| `QualityGateInterface` | `CommandQualityGate` | Run linters / tests | — (aliased) |
+
+To customize the prompt, decorate the `PromptBuilderInterface` alias or replace
+`DefaultPromptBuilder`.
+
+## How it works
+
+```
+TicketSource ─► BranchPlanner ─► GitClient.createBranch
+                                       │
+                                 PromptBuilder
+                                       │
+                                  CodingAgent.run   (edits the working tree)
+                                       │
+                              GitClient.commitAndPush
+                                       │
+                          MergeRequestFactory + VcsProvider.createMergeRequest
+```
+
+`AutoDevRunner` is the reusable, side-effecting core; the console commands and the
+HTTP controller are thin layers on top of it.
+
+## Testing
+
+```bash
+composer install
+composer test     # phpunit
+composer stan     # phpstan (level 8)
+composer cs       # php-cs-fixer (dry-run)
+```
+
+## License
+
+Released under the [MIT License](LICENSE).

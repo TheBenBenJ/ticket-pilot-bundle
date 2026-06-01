@@ -1,0 +1,62 @@
+{
+    "name": "thebenbenj/ticket-pilot-bundle",
+    "description": "Autonomous AI development pipeline for Symfony: turns tickets (Jira, Sentry, GitHub Issues) into merge/pull requests via a coding agent (Cursor CLI, Claude Code, ...).",
+    "type": "symfony-bundle",
+    "license": "MIT",
+    "keywords": ["symfony", "bundle", "ai", "agent", "automation", "jira", "sentry", "gitlab", "github", "devops", "cursor", "claude"],
+    "authors": [
+        {
+            "name": "TheBenBenJ",
+            "homepage": "https://github.com/TheBenBenJ"
+        }
+    ],
+    "require": {
+        "php": ">=8.2",
+        "psr/log": "^2.0 || ^3.0",
+        "symfony/config": "^6.4 || ^7.0",
+        "symfony/console": "^6.4 || ^7.0",
+        "symfony/dependency-injection": "^6.4 || ^7.0",
+        "symfony/http-client-contracts": "^3.0",
+        "symfony/http-foundation": "^6.4 || ^7.0",
+        "symfony/http-kernel": "^6.4 || ^7.0",
+        "symfony/process": "^6.4 || ^7.0"
+    },
+    "require-dev": {
+        "friendsofphp/php-cs-fixer": "^3.50",
+        "phpstan/phpstan": "^1.11",
+        "phpunit/phpunit": "^10.5 || ^11.0",
+        "symfony/framework-bundle": "^6.4 || ^7.0",
+        "symfony/http-client": "^6.4 || ^7.0",
+        "symfony/routing": "^6.4 || ^7.0",
+        "symfony/yaml": "^6.4 || ^7.0"
+    },
+    "suggest": {
+        "symfony/http-client": "Required by the bundled Jira, Sentry and GitLab integrations",
+        "symfony/routing": "Required to expose the pipeline-trigger HTTP endpoint"
+    },
+    "autoload": {
+        "psr-4": {
+            "TheBenBenJ\\TicketPilotBundle\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "TheBenBenJ\\TicketPilotBundle\\Tests\\": "tests/"
+        }
+    },
+    "scripts": {
+        "cs": "php-cs-fixer fix --diff --dry-run",
+        "cs-fix": "php-cs-fixer fix",
+        "stan": "phpstan analyse",
+        "test": "phpunit",
+        "check": ["@cs", "@stan", "@test"]
+    },
+    "config": {
+        "sort-packages": true,
+        "allow-plugins": {
+            "symfony/flex": true
+        }
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true
+}
