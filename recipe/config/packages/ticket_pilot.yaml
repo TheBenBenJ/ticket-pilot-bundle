@@ -1,0 +1,40 @@
+# See https://github.com/TheBenBenJ/ticket-pilot-bundle for the full reference
+# (run `php bin/console config:dump-reference ticket_pilot`).
+#
+# Sources, the VCS provider and the quality gate are opt-in. Enable what you use
+# and keep every secret in environment variables. Read SECURITY.md before
+# pointing this at a repository that contains secrets.
+ticket_pilot:
+    default_source: github
+    default_agent: claude
+
+    # sources:
+    #     jira:
+    #         enabled: true
+    #         base_uri: '%env(JIRA_URL)%'
+    #         email: '%env(JIRA_EMAIL)%'
+    #         token: '%env(JIRA_TOKEN)%'
+    #         project: '%env(JIRA_PROJECT)%'
+    #     github:
+    #         enabled: true
+    #         token: '%env(TICKET_PILOT_GITHUB_TOKEN)%'
+    #         repository: '%env(TICKET_PILOT_GITHUB_REPOSITORY)%'
+
+    # vcs:
+    #     github:
+    #         enabled: true
+    #         token: '%env(TICKET_PILOT_GITHUB_TOKEN)%'
+    #         repository: '%env(TICKET_PILOT_GITHUB_REPOSITORY)%'
+
+    # merge_request:
+    #     draft: true
+
+    # quality:
+    #     enabled: true
+    #     on_failure: draft
+    #     commands:
+    #         check: ['make', 'check']
+    #         test: ['make', 'test']
+
+    # security:
+    #     trusted_reporters: []

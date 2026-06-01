@@ -36,6 +36,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Extracted `GitInterface` (git operations are now mockable; `GitClient` is `final` again).
 - Renamed `MergeRequest::$iid` to `$number` to de-couple the public model from GitLab
   vocabulary (it maps to the GitLab MR iid and the GitHub PR number).
+- Added a Symfony Flex recipe (under `recipe/`) ready to submit to `symfony/recipes-contrib`:
+  registers the bundle, copies a starter config and seeds `TICKET_PILOT_*` env vars.
 
 ### Security
 - Prompt-injection hardening: `DefaultPromptBuilder` now wraps attacker-controllable

@@ -1,0 +1,13 @@
+{
+    "bundles": {
+        "TheBenBenJ\\TicketPilotBundle\\TicketPilotBundle": ["all"]
+    },
+    "copy-from-recipe": {
+        "config/": "%CONFIG_DIR%/"
+    },
+    "env": {
+        "TICKET_PILOT_GITHUB_TOKEN": "",
+        "TICKET_PILOT_GITHUB_REPOSITORY": "owner/repo"
+    },
+    "aliases": ["ticket-pilot"]
+}

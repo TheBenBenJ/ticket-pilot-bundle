@@ -31,7 +31,8 @@ source, VCS provider, coding agent or prompt without touching the core.
 composer require thebenbenj/ticket-pilot-bundle
 ```
 
-If you do not use Symfony Flex, enable the bundle manually:
+Enable the bundle manually (until the [Flex recipe](recipe/) is published to
+`symfony/recipes-contrib`, which will do this and drop a starter config for you):
 
 ```php
 // config/bundles.php
