@@ -6,6 +6,7 @@ namespace TheBenBenJ\TicketPilotBundle\Service;
 
 use TheBenBenJ\TicketPilotBundle\Contract\PromptBuilderInterface;
 use TheBenBenJ\TicketPilotBundle\Contract\QualityGateInterface;
+use TheBenBenJ\TicketPilotBundle\Contract\QualityReport;
 use TheBenBenJ\TicketPilotBundle\Contract\VcsProviderInterface;
 use TheBenBenJ\TicketPilotBundle\Exception\QualityGateFailedException;
 use TheBenBenJ\TicketPilotBundle\Git\GitClient;
@@ -22,9 +23,7 @@ use TheBenBenJ\TicketPilotBundle\Registry\AgentRegistry;
 final class AutoDevRunner
 {
     /**
-     * @param list<string>              $excludePaths Paths the agent's commit must never include
-     * @param QualityGateInterface|null $qualityGate  When set, runs after the agent and before
-     *                                                push; a failure aborts (no commit, no MR)
+     * @param QualityGateInterface|null $qualityGate When set, runs after the agent and before push
      */
     public function __construct(
         private readonly AgentRegistry $agents,
@@ -33,7 +32,7 @@ final class AutoDevRunner
         private readonly MergeRequestFactory $mergeRequestFactory,
         private readonly GitClient $git,
         private readonly VcsProviderInterface $vcs,
-        private readonly array $excludePaths = [],
+        private readonly AutoDevOptions $options = new AutoDevOptions(),
         private readonly ?QualityGateInterface $qualityGate = null,
     ) {
     }
@@ -41,7 +40,7 @@ final class AutoDevRunner
     /**
      * @param callable(string):void|null $onOutput Streamed agent-output callback
      *
-     * @throws QualityGateFailedException when the quality gate does not pass
+     * @throws QualityGateFailedException when the quality gate fails and the policy is "abort"
      * @throws \RuntimeException          when the branch already exists or any step fails
      */
     public function process(
@@ -65,26 +64,47 @@ final class AutoDevRunner
         $prompt = $this->promptBuilder->build($ticket);
         $result = $agent->run($prompt, $model, $onOutput);
 
-        if (null !== $this->qualityGate) {
-            $report = $this->qualityGate->verify();
-            if (!$report->passed) {
-                throw new QualityGateFailedException($report);
-            }
-        }
+        $qualityFailure = $this->runQualityGate();
 
         $this->git->commitAndPush(
             $plan->branch,
             $this->mergeRequestFactory->commitMessage($ticket),
-            $this->excludePaths,
+            $this->options->excludePaths,
         );
+
+        $draft = $this->options->draft || null !== $qualityFailure;
 
         $mergeRequest = $this->vcs->createMergeRequest(
             $plan->branch,
             $plan->base,
             $this->mergeRequestFactory->title($ticket),
-            $this->mergeRequestFactory->description($ticket, $result->output),
+            $this->mergeRequestFactory->description($ticket, $result->output, $qualityFailure),
+            $draft,
         );
 
         return new AutoDevOutcome($ticket->key, $plan, $mergeRequest);
+    }
+
+    /**
+     * Runs the quality gate if configured. Returns the failing report when the
+     * policy keeps going (draft), null when it passed or no gate is set, and
+     * throws when the policy is "abort".
+     */
+    private function runQualityGate(): ?QualityReport
+    {
+        if (null === $this->qualityGate) {
+            return null;
+        }
+
+        $report = $this->qualityGate->verify();
+        if ($report->passed) {
+            return null;
+        }
+
+        if ($this->options->abortsOnQualityFailure()) {
+            throw new QualityGateFailedException($report);
+        }
+
+        return $report;
     }
 }

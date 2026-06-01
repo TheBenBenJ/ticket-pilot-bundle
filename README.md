@@ -110,10 +110,13 @@ ticket_pilot:
         release_branch_pattern: 'release/RC-{version}'   # {version} = ticket fix version
         bug_types: ['bug', 'anomalie', 'defect']
 
+    merge_request:
+        draft: true                  # open every MR/PR as a draft (a proposal, never auto-mergeable)
+
     # When enabled, these commands run AFTER the agent and BEFORE push.
-    # If they fail, the run aborts: nothing is pushed and no merge request is opened.
     quality:
         enabled: true
+        on_failure: draft            # 'abort' = no push / no MR ; 'draft' = push + draft MR flagged with the errors
         commands:
             check: ['make', 'check']
             test: ['make', 'test']

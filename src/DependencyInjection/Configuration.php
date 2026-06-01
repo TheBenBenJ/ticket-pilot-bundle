@@ -161,6 +161,9 @@ final class Configuration implements ConfigurationInterface
             ->scalarNode('commit_message_template')->defaultValue('[{key}] {title}')
                 ->info('Supports the {key} and {title} placeholders.')
             ->end()
+            ->booleanNode('draft')->defaultFalse()
+                ->info('Open every merge/pull request as a draft (a proposal, never auto-mergeable).')
+            ->end()
         ->end()->end();
     }
 
@@ -168,6 +171,11 @@ final class Configuration implements ConfigurationInterface
     {
         $root->children()->arrayNode('quality')->canBeEnabled()->children()
             ->integerNode('timeout')->defaultValue(300)->min(1)->end()
+            ->enumNode('on_failure')
+                ->values(['abort', 'draft'])
+                ->defaultValue('abort')
+                ->info('When checks fail: "abort" (no push, no MR) or "draft" (push and open a draft MR flagged with the failing checks).')
+            ->end()
             ->arrayNode('commands')
                 ->info('Ordered map of label => argv, e.g. { check: [make, check] }.')
                 ->useAttributeAsKey('name')

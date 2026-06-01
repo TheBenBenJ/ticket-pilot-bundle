@@ -41,6 +41,7 @@ final class GitlabProvider implements VcsProviderInterface, PipelineTriggerInter
         string $targetBranch,
         string $title,
         string $description,
+        bool $draft = false,
     ): MergeRequest {
         try {
             $data = $this->client->request(
@@ -49,7 +50,8 @@ final class GitlabProvider implements VcsProviderInterface, PipelineTriggerInter
                 ['json' => [
                     'source_branch' => $sourceBranch,
                     'target_branch' => $targetBranch,
-                    'title' => $title,
+                    // GitLab marks a merge request as draft from the "Draft:" title prefix.
+                    'title' => $draft ? 'Draft: '.$title : $title,
                     'description' => $description,
                     'remove_source_branch' => true,
                 ]],

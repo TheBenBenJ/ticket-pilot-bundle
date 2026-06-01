@@ -22,6 +22,15 @@ final class ConfigurationTest extends TestCase
         self::assertSame('develop', $config['branching']['feature_base']);
         self::assertSame('release/RC-{version}', $config['branching']['release_branch_pattern']);
         self::assertSame('[{key}] {title}', $config['merge_request']['commit_message_template']);
+        self::assertFalse($config['merge_request']['draft']);
+        self::assertSame('abort', $config['quality']['on_failure']);
+    }
+
+    public function testInvalidQualityOnFailurePolicyIsRejected(): void
+    {
+        $this->expectException(InvalidConfigurationException::class);
+
+        $this->process([['quality' => ['enabled' => true, 'on_failure' => 'whatever']]]);
     }
 
     public function testEnablingJiraRequiresCredentials(): void

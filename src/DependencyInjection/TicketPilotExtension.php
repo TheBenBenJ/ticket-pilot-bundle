@@ -28,6 +28,7 @@ use TheBenBenJ\TicketPilotBundle\Prompt\DefaultPromptBuilder;
 use TheBenBenJ\TicketPilotBundle\Quality\CommandQualityGate;
 use TheBenBenJ\TicketPilotBundle\Registry\AgentRegistry;
 use TheBenBenJ\TicketPilotBundle\Registry\TicketSourceRegistry;
+use TheBenBenJ\TicketPilotBundle\Service\AutoDevOptions;
 use TheBenBenJ\TicketPilotBundle\Service\AutoDevRunner;
 use TheBenBenJ\TicketPilotBundle\Service\BranchPlanner;
 use TheBenBenJ\TicketPilotBundle\Service\MergeRequestFactory;
@@ -267,6 +268,12 @@ final class TicketPilotExtension extends Extension
             return;
         }
 
+        $options = new Definition(AutoDevOptions::class, [
+            $config['commit']['exclude_paths'],
+            $config['merge_request']['draft'],
+            $config['quality']['on_failure'],
+        ]);
+
         $container->setDefinition(AutoDevRunner::class, new Definition(AutoDevRunner::class, [
             new Reference(AgentRegistry::class),
             new Reference(PromptBuilderInterface::class),
@@ -274,7 +281,7 @@ final class TicketPilotExtension extends Extension
             new Reference(MergeRequestFactory::class),
             new Reference(GitClient::class),
             new Reference(VcsProviderInterface::class),
-            $config['commit']['exclude_paths'],
+            $options,
             $config['quality']['enabled'] ? new Reference(QualityGateInterface::class) : null,
         ]));
 

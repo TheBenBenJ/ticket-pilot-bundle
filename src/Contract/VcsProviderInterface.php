@@ -17,6 +17,7 @@ interface VcsProviderInterface
         string $targetBranch,
         string $title,
         string $description,
+        bool $draft = false,
     ): MergeRequest;
 
     /**

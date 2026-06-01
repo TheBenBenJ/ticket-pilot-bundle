@@ -55,6 +55,7 @@ final class GitHubProvider implements VcsProviderInterface, PipelineTriggerInter
         string $targetBranch,
         string $title,
         string $description,
+        bool $draft = false,
     ): MergeRequest {
         try {
             $data = $this->client->request(
@@ -65,6 +66,7 @@ final class GitHubProvider implements VcsProviderInterface, PipelineTriggerInter
                     'head' => $sourceBranch,
                     'base' => $targetBranch,
                     'body' => $description,
+                    'draft' => $draft,
                 ]],
             )->toArray();
 

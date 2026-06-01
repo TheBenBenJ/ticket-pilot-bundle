@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace TheBenBenJ\TicketPilotBundle\Tests\Unit\Service;
 
+use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
 use TheBenBenJ\TicketPilotBundle\Contract\CodingAgentInterface;
 use TheBenBenJ\TicketPilotBundle\Contract\PromptBuilderInterface;
@@ -16,13 +17,14 @@ use TheBenBenJ\TicketPilotBundle\Model\AgentResult;
 use TheBenBenJ\TicketPilotBundle\Model\MergeRequest;
 use TheBenBenJ\TicketPilotBundle\Model\Ticket;
 use TheBenBenJ\TicketPilotBundle\Registry\AgentRegistry;
+use TheBenBenJ\TicketPilotBundle\Service\AutoDevOptions;
 use TheBenBenJ\TicketPilotBundle\Service\AutoDevRunner;
 use TheBenBenJ\TicketPilotBundle\Service\BranchPlanner;
 use TheBenBenJ\TicketPilotBundle\Service\MergeRequestFactory;
 
 final class AutoDevRunnerTest extends TestCase
 {
-    public function testFailingQualityGateAbortsBeforePushAndMergeRequest(): void
+    public function testFailingQualityGateWithAbortPolicyOpensNoMergeRequest(): void
     {
         $git = $this->git();
         $git->expects(self::never())->method('commitAndPush');
@@ -30,41 +32,51 @@ final class AutoDevRunnerTest extends TestCase
         $vcs = $this->createMock(VcsProviderInterface::class);
         $vcs->expects(self::never())->method('createMergeRequest');
 
-        $runner = $this->runner($git, $vcs, $this->gate(false));
+        $runner = $this->runner($git, $vcs, $this->gate(false), new AutoDevOptions(onQualityFailure: 'abort'));
 
         $this->expectException(QualityGateFailedException::class);
-
         $runner->process($this->ticket(), 'cursor');
     }
 
-    public function testPassingQualityGatePushesAndOpensMergeRequest(): void
+    public function testFailingQualityGateWithDraftPolicyOpensADraftMergeRequest(): void
     {
         $git = $this->git();
         $git->expects(self::once())->method('commitAndPush');
 
         $vcs = $this->createMock(VcsProviderInterface::class);
-        $vcs->expects(self::once())->method('createMergeRequest')->willReturn(new MergeRequest(7, 'https://mr/7'));
+        $vcs->expects(self::once())->method('createMergeRequest')
+            ->with(self::anything(), self::anything(), self::anything(), self::anything(), self::isTrue())
+            ->willReturn(new MergeRequest(7, 'https://mr/7'));
 
-        $outcome = $this->runner($git, $vcs, $this->gate(true))->process($this->ticket(), 'cursor');
+        $outcome = $this->runner($git, $vcs, $this->gate(false), new AutoDevOptions(onQualityFailure: 'draft'))
+            ->process($this->ticket(), 'cursor');
 
-        self::assertSame('PROJ-1', $outcome->ticketKey);
         self::assertSame(7, $outcome->mergeRequest->iid);
     }
 
-    public function testWithoutQualityGateThePipelineRunsUnchanged(): void
+    public function testAlwaysDraftOptionOpensADraftEvenWhenQualityPasses(): void
     {
-        $git = $this->git();
-        $git->expects(self::once())->method('commitAndPush');
-
         $vcs = $this->createMock(VcsProviderInterface::class);
-        $vcs->expects(self::once())->method('createMergeRequest')->willReturn(new MergeRequest(1, 'https://mr/1'));
+        $vcs->expects(self::once())->method('createMergeRequest')
+            ->with(self::anything(), self::anything(), self::anything(), self::anything(), self::isTrue())
+            ->willReturn(new MergeRequest(1, 'https://mr/1'));
 
-        $outcome = $this->runner($git, $vcs, null)->process($this->ticket(), 'cursor');
-
-        self::assertSame(1, $outcome->mergeRequest->iid);
+        $this->runner($this->git(), $vcs, $this->gate(true), new AutoDevOptions(draft: true))
+            ->process($this->ticket(), 'cursor');
     }
 
-    private function runner(GitClient $git, VcsProviderInterface $vcs, ?QualityGateInterface $gate): AutoDevRunner
+    public function testWithoutQualityGateOpensANonDraftMergeRequest(): void
+    {
+        $vcs = $this->createMock(VcsProviderInterface::class);
+        $vcs->expects(self::once())->method('createMergeRequest')
+            ->with(self::anything(), self::anything(), self::anything(), self::anything(), self::isFalse())
+            ->willReturn(new MergeRequest(1, 'https://mr/1'));
+
+        $this->runner($this->git(), $vcs, null, new AutoDevOptions())
+            ->process($this->ticket(), 'cursor');
+    }
+
+    private function runner(GitClient $git, VcsProviderInterface $vcs, ?QualityGateInterface $gate, AutoDevOptions $options): AutoDevRunner
     {
         $agent = $this->createStub(CodingAgentInterface::class);
         $agent->method('getName')->willReturn('cursor');
@@ -80,12 +92,12 @@ final class AutoDevRunnerTest extends TestCase
             new MergeRequestFactory(),
             $git,
             $vcs,
-            [],
+            $options,
             $gate,
         );
     }
 
-    private function git(): GitClient&\PHPUnit\Framework\MockObject\MockObject
+    private function git(): GitClient&MockObject
     {
         $git = $this->createMock(GitClient::class);
         $git->method('localBranchExists')->willReturn(false);

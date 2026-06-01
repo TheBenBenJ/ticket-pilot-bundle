@@ -23,6 +23,20 @@ final class GitHubProviderTest extends TestCase
         self::assertSame('https://github.com/acme/app/pull/7', $mr->url);
     }
 
+    public function testDraftFlagIsSentInThePullRequestPayload(): void
+    {
+        $body = null;
+        $client = new MockHttpClient(static function (string $method, string $url, array $options) use (&$body): MockResponse {
+            $body = $options['body'] ?? '';
+
+            return new MockResponse((string) json_encode(['number' => 8, 'html_url' => 'u']), ['http_code' => 201]);
+        });
+
+        $this->provider($client)->createMergeRequest('feature/42', 'main', 'Title', 'Body', true);
+
+        self::assertStringContainsString('"draft":true', (string) $body);
+    }
+
     public function testRemoteBranchExistsReflectsHttpStatus(): void
     {
         $present = $this->provider(new MockHttpClient([new MockResponse('{}', ['http_code' => 200])]));

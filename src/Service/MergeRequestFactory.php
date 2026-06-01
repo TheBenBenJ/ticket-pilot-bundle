@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace TheBenBenJ\TicketPilotBundle\Service;
 
+use TheBenBenJ\TicketPilotBundle\Contract\QualityReport;
 use TheBenBenJ\TicketPilotBundle\Model\Ticket;
 
 /**
@@ -14,6 +15,7 @@ final class MergeRequestFactory
 {
     private const SUMMARY_MAX_CHARS = 4000;
     private const DESCRIPTION_MAX_CHARS = 500;
+    private const QUALITY_ERRORS_MAX_CHARS = 2000;
 
     public function __construct(
         private readonly string $summaryStartMarker = '<<<MR_SUMMARY',
@@ -35,8 +37,17 @@ final class MergeRequestFactory
         ]);
     }
 
-    public function description(Ticket $ticket, ?string $agentOutput = null): string
+    public function description(Ticket $ticket, ?string $agentOutput = null, ?QualityReport $qualityFailure = null): string
     {
+        $warning = '';
+        if (null !== $qualityFailure && !$qualityFailure->passed) {
+            $errors = mb_substr(trim($qualityFailure->errors), 0, self::QUALITY_ERRORS_MAX_CHARS);
+            $warning = "> ⚠️ **Quality checks failed** — opened as a draft for human review. Do not merge as-is.\n\n";
+            if ('' !== $errors) {
+                $warning .= "<details><summary>Quality output</summary>\n\n```\n{$errors}\n```\n\n</details>\n\n";
+            }
+        }
+
         $summary = $this->summarizeDescription($ticket->description);
 
         $info = \sprintf("- **Type**: %s\n- **Priority**: %s\n- **Source**: %s", $ticket->type, $ticket->priority, $ticket->source);
@@ -57,7 +68,7 @@ final class MergeRequestFactory
         $issueLink = $ticket->url ?? $ticket->key;
 
         return <<<MD
-            ### Description
+            {$warning}### Description
             {$summary}
 
             ### Changes Made

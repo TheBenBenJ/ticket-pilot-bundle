@@ -19,6 +19,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Optional HTTP endpoint to trigger a CI pipeline carrying the auto-dev variables.
 - Semantic configuration tree under `ticket_pilot`, with conditional service registration.
 - Quality gate enforcement: when `quality.enabled` is set, `AutoDevRunner` runs the
-  configured checks after the agent and before pushing; a failure raises
-  `QualityGateFailedException` and aborts, so no branch is pushed and no merge request
-  is opened for broken code.
+  configured checks after the agent and before pushing.
+- Draft merge/pull requests: `merge_request.draft` opens every MR/PR as a draft, and
+  `quality.on_failure: draft` keeps the agent's work by pushing and opening a draft MR
+  flagged with the failing checks instead of aborting (`abort` stays the default).
+  The `draft` flag is honored by both the GitLab (title prefix) and GitHub (`draft`
+  field) providers; runner behaviour is grouped in an `AutoDevOptions` value object.
