@@ -12,7 +12,7 @@ use Symfony\Component\Process\Process;
  * Every command is prefixed with `-c safe.directory=<dir>` to avoid the
  * "dubious ownership" failure that occurs when running inside CI containers.
  */
-class GitClient
+final class GitClient implements GitInterface
 {
     public function __construct(
         private readonly string $projectDir,

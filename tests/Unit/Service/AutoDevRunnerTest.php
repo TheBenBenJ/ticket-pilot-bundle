@@ -15,7 +15,7 @@ use TheBenBenJ\TicketPilotBundle\Contract\VcsProviderInterface;
 use TheBenBenJ\TicketPilotBundle\Event\TicketFailedEvent;
 use TheBenBenJ\TicketPilotBundle\Event\TicketProcessedEvent;
 use TheBenBenJ\TicketPilotBundle\Exception\QualityGateFailedException;
-use TheBenBenJ\TicketPilotBundle\Git\GitClient;
+use TheBenBenJ\TicketPilotBundle\Git\GitInterface;
 use TheBenBenJ\TicketPilotBundle\Model\AgentResult;
 use TheBenBenJ\TicketPilotBundle\Model\MergeRequest;
 use TheBenBenJ\TicketPilotBundle\Model\Ticket;
@@ -83,7 +83,7 @@ final class AutoDevRunnerTest extends TestCase
         $outcome = $this->runner($git, $vcs, $this->gate(false), new AutoDevOptions(onQualityFailure: 'draft'))
             ->process($this->ticket(), 'cursor');
 
-        self::assertSame(7, $outcome->mergeRequest->iid);
+        self::assertSame(7, $outcome->mergeRequest->number);
     }
 
     public function testAlwaysDraftOptionOpensADraftEvenWhenQualityPasses(): void
@@ -135,7 +135,7 @@ final class AutoDevRunnerTest extends TestCase
         $this->runner($this->git(), $vcs, $this->gate(true), new AutoDevOptions(), $dispatcher)->process($this->ticket(), 'cursor');
     }
 
-    private function runner(GitClient $git, VcsProviderInterface $vcs, ?QualityGateInterface $gate, AutoDevOptions $options, ?EventDispatcherInterface $dispatcher = null): AutoDevRunner
+    private function runner(GitInterface $git, VcsProviderInterface $vcs, ?QualityGateInterface $gate, AutoDevOptions $options, ?EventDispatcherInterface $dispatcher = null): AutoDevRunner
     {
         $agent = $this->createStub(CodingAgentInterface::class);
         $agent->method('getName')->willReturn('cursor');
@@ -157,9 +157,9 @@ final class AutoDevRunnerTest extends TestCase
         );
     }
 
-    private function git(): GitClient&MockObject
+    private function git(): GitInterface&MockObject
     {
-        $git = $this->createMock(GitClient::class);
+        $git = $this->createMock(GitInterface::class);
         $git->method('localBranchExists')->willReturn(false);
         $git->method('remoteBranchExists')->willReturn(false);
 

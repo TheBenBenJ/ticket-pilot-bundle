@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace TheBenBenJ\TicketPilotBundle\Tests\Unit\Service;
 
 use PHPUnit\Framework\TestCase;
-use TheBenBenJ\TicketPilotBundle\Git\GitClient;
+use TheBenBenJ\TicketPilotBundle\Git\GitInterface;
 use TheBenBenJ\TicketPilotBundle\Model\Ticket;
 use TheBenBenJ\TicketPilotBundle\Service\BranchPlanner;
 
@@ -29,7 +29,7 @@ final class BranchPlannerTest extends TestCase
 
     public function testNumericFixVersionTargetsExistingReleaseBranch(): void
     {
-        $git = $this->createMock(GitClient::class);
+        $git = $this->createMock(GitInterface::class);
         $git->method('remoteBranchExists')->with('release/RC-1.4')->willReturn(true);
 
         $plan = $this->planner($git)->plan($this->ticket(type: 'Story', fixVersions: ['1.4']));
@@ -39,7 +39,7 @@ final class BranchPlannerTest extends TestCase
 
     public function testMissingReleaseBranchFallsBackToBase(): void
     {
-        $git = $this->createMock(GitClient::class);
+        $git = $this->createMock(GitInterface::class);
         $git->method('remoteBranchExists')->willReturn(false);
 
         $plan = $this->planner($git)->plan($this->ticket(type: 'Story', fixVersions: ['9.9']));
@@ -47,9 +47,9 @@ final class BranchPlannerTest extends TestCase
         self::assertSame('develop', $plan->base);
     }
 
-    private function planner(?GitClient $git = null): BranchPlanner
+    private function planner(?GitInterface $git = null): BranchPlanner
     {
-        return new BranchPlanner($git ?? $this->createStub(GitClient::class));
+        return new BranchPlanner($git ?? $this->createStub(GitInterface::class));
     }
 
     /**

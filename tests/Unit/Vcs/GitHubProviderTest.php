@@ -19,7 +19,7 @@ final class GitHubProviderTest extends TestCase
 
         $mr = $this->provider($client)->createMergeRequest('feature/42', 'main', 'Title', 'Body');
 
-        self::assertSame(7, $mr->iid);
+        self::assertSame(7, $mr->number);
         self::assertSame('https://github.com/acme/app/pull/7', $mr->url);
     }
 

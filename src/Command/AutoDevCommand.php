@@ -130,7 +130,7 @@ final class AutoDevCommand extends Command
                     $model,
                     static fn (string $buffer) => $output->write($buffer),
                 );
-                $io->success(\sprintf('MR !%d created: %s', $outcome->mergeRequest->iid, $outcome->mergeRequest->url));
+                $io->success(\sprintf('MR/PR #%d created: %s', $outcome->mergeRequest->number, $outcome->mergeRequest->url));
                 ++$succeeded;
             } catch (\Throwable $e) {
                 $io->error(\sprintf('%s: %s', $ticket->key, $e->getMessage()));

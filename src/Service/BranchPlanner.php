@@ -6,7 +6,7 @@ namespace TheBenBenJ\TicketPilotBundle\Service;
 
 use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
-use TheBenBenJ\TicketPilotBundle\Git\GitClient;
+use TheBenBenJ\TicketPilotBundle\Git\GitInterface;
 use TheBenBenJ\TicketPilotBundle\Model\BranchPlan;
 use TheBenBenJ\TicketPilotBundle\Model\Ticket;
 
@@ -27,7 +27,7 @@ final class BranchPlanner
      * @param list<string> $bugTypes Lower-cased ticket types treated as bugs
      */
     public function __construct(
-        private readonly GitClient $git,
+        private readonly GitInterface $git,
         private readonly string $featureBase = 'develop',
         private readonly string $hotfixBase = 'main',
         private readonly string $featurePrefix = 'feature',

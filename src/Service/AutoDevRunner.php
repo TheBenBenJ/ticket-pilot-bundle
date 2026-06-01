@@ -12,7 +12,7 @@ use TheBenBenJ\TicketPilotBundle\Contract\VcsProviderInterface;
 use TheBenBenJ\TicketPilotBundle\Event\TicketFailedEvent;
 use TheBenBenJ\TicketPilotBundle\Event\TicketProcessedEvent;
 use TheBenBenJ\TicketPilotBundle\Exception\QualityGateFailedException;
-use TheBenBenJ\TicketPilotBundle\Git\GitClient;
+use TheBenBenJ\TicketPilotBundle\Git\GitInterface;
 use TheBenBenJ\TicketPilotBundle\Model\Ticket;
 use TheBenBenJ\TicketPilotBundle\Registry\AgentRegistry;
 
@@ -34,7 +34,7 @@ final class AutoDevRunner
         private readonly PromptBuilderInterface $promptBuilder,
         private readonly BranchPlanner $branchPlanner,
         private readonly MergeRequestFactory $mergeRequestFactory,
-        private readonly GitClient $git,
+        private readonly GitInterface $git,
         private readonly VcsProviderInterface $vcs,
         private readonly AutoDevOptions $options = new AutoDevOptions(),
         private readonly ?QualityGateInterface $qualityGate = null,

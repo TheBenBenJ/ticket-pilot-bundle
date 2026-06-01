@@ -9,8 +9,11 @@ namespace TheBenBenJ\TicketPilotBundle\Model;
  */
 final readonly class MergeRequest
 {
+    /**
+     * @param int $number Provider-side identifier (GitLab MR iid, GitHub PR number)
+     */
     public function __construct(
-        public int $iid,
+        public int $number,
         public string $url,
     ) {
     }

@@ -33,6 +33,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Lifecycle events: `AutoDevRunner` dispatches `TicketProcessedEvent` on success and
   `TicketFailedEvent` on failure (when an event dispatcher is available) for observability
   and extensibility. Adds a dependency on `symfony/event-dispatcher-contracts`.
+- Extracted `GitInterface` (git operations are now mockable; `GitClient` is `final` again).
+- Renamed `MergeRequest::$iid` to `$number` to de-couple the public model from GitLab
+  vocabulary (it maps to the GitLab MR iid and the GitHub PR number).
 
 ### Security
 - Prompt-injection hardening: `DefaultPromptBuilder` now wraps attacker-controllable

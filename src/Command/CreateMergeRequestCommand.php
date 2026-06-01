@@ -76,7 +76,7 @@ final class CreateMergeRequestCommand extends Command
             return Command::FAILURE;
         }
 
-        $io->success(\sprintf('MR !%d created: %s', $mergeRequest->iid, $mergeRequest->url));
+        $io->success(\sprintf('MR/PR #%d created: %s', $mergeRequest->number, $mergeRequest->url));
 
         return Command::SUCCESS;
     }

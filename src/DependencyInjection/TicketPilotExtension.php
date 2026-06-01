@@ -24,6 +24,7 @@ use TheBenBenJ\TicketPilotBundle\Contract\QualityGateInterface;
 use TheBenBenJ\TicketPilotBundle\Contract\VcsProviderInterface;
 use TheBenBenJ\TicketPilotBundle\Controller\TriggerPipelineController;
 use TheBenBenJ\TicketPilotBundle\Git\GitClient;
+use TheBenBenJ\TicketPilotBundle\Git\GitInterface;
 use TheBenBenJ\TicketPilotBundle\Prompt\DefaultPromptBuilder;
 use TheBenBenJ\TicketPilotBundle\Quality\CommandQualityGate;
 use TheBenBenJ\TicketPilotBundle\Registry\AgentRegistry;
@@ -82,6 +83,7 @@ final class TicketPilotExtension extends Extension
         $container->setDefinition(AgentRegistry::class, $agentRegistry);
 
         $container->setDefinition(GitClient::class, new Definition(GitClient::class, [$projectDir]));
+        $container->setAlias(GitInterface::class, GitClient::class);
 
         $container->setDefinition(TicketGuard::class, new Definition(TicketGuard::class, [
             $config['security']['trusted_reporters'],
