@@ -12,10 +12,18 @@ use TheBenBenJ\TicketPilotBundle\Contract\VcsProviderInterface;
 use TheBenBenJ\TicketPilotBundle\Controller\TriggerPipelineController;
 use TheBenBenJ\TicketPilotBundle\Registry\AgentRegistry;
 use TheBenBenJ\TicketPilotBundle\Registry\TicketSourceRegistry;
+use TheBenBenJ\TicketPilotBundle\TicketPilotBundle;
 
 final class BundleIntegrationTest extends TestCase
 {
     private ?TestKernel $kernel = null;
+
+    public function testRouteResourceResolvesUnderBundlePath(): void
+    {
+        // Guards the @TicketPilotBundle/Resources/config/routes.php import used to
+        // expose the pipeline-trigger endpoint.
+        self::assertFileExists((new TicketPilotBundle())->getPath().'/Resources/config/routes.php');
+    }
 
     public function testContainerCompilesWithDefaultsAndRegistersAgents(): void
     {
