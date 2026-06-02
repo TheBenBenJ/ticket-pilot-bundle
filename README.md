@@ -4,18 +4,34 @@
 [![Latest Stable Version](https://img.shields.io/packagist/v/thebenbenj/ticket-pilot-bundle)](https://packagist.org/packages/thebenbenj/ticket-pilot-bundle)
 [![License](https://img.shields.io/packagist/l/thebenbenj/ticket-pilot-bundle)](LICENSE)
 
-A Symfony bundle that turns **tickets** (Jira, Sentry, GitHub Issues, …) into
-**merge / pull requests** on your **VCS host** (GitLab, GitHub, …) by driving an
-autonomous **coding agent** (Cursor CLI, Claude Code, …) — fetch a ticket, create
-the right branch, run the agent against the working tree, commit, push and open
-the merge/pull request.
+**Your tickets, shipped as merge requests — automatically, on your own infra.**
 
-Everything is built around small interfaces, so you can plug in your own ticket
-source, VCS provider, coding agent or prompt without touching the core.
+Ticket Pilot is a self-hosted Symfony bundle that closes the loop from **ticket** to
+**merge/pull request**: it picks up a ticket (Jira, Sentry, GitHub Issues), creates the
+right branch, drives a **coding agent** (Cursor CLI, Claude Code) to implement it, runs
+your quality checks, then opens a ready-to-review MR/PR on GitLab or GitHub.
+
+Run it from the CLI, expose it as an HTTP endpoint, or let it run **unattended** on a
+schedule — it works through the boring tickets while your team focuses on the hard ones.
+No SaaS, your keys, your runners.
+
+### Why Ticket Pilot
+
+- 🎫 **Multi-source** — Jira, Sentry and GitHub Issues out of the box (one interface to add yours).
+- 🤖 **Multi-agent** — Cursor CLI and Claude Code, swappable; bring your own.
+- 🔀 **Multi-VCS** — GitLab merge requests and GitHub pull requests, including draft MRs.
+- 🧠 **Smart branching** — features off `develop`, hotfixes off `main`, release branches from the ticket's fix version.
+- ✅ **Quality gate** — runs your `make check` / tests before pushing; abort or open a flagged draft on failure.
+- 🔐 **Hardened** — untrusted ticket content is fenced against prompt injection; optional trusted-reporters allowlist; failed runs clean up their branch.
+- 🪝 **Extensible & observable** — tagged-service registries, `TicketProcessed` / `TicketFailed` events, a configurable prompt.
+- 🏠 **Self-hosted & open source (MIT)** — no third-party service, your tokens never leave your infra.
+
+Everything is built around small interfaces, so you can plug in your own ticket source,
+VCS provider, coding agent or prompt without touching the core.
 
 > ⚠️ The bundle runs a coding agent that **writes to your repository and pushes
 > branches**. Run it in CI or a disposable working copy, never against an
-> environment you cannot throw away.
+> environment you cannot throw away. See [SECURITY.md](SECURITY.md).
 
 ## Requirements
 
@@ -192,6 +208,63 @@ jobs:
               --source="${{ github.event.client_payload.IA_SOURCE }}"
               --agent="${{ github.event.client_payload.IA_AGENT }}"
 ```
+
+## Running it unattended (server / CI / cron)
+
+The point of Ticket Pilot is to run **without a human in the loop**: on a schedule, it
+fetches the pending tickets of a source and ships an MR/PR for each. The agent edits the
+repo and pushes, so always run it in a **disposable, isolated job** (ephemeral CI runner
+or container) with a **minimally-scoped token**, and gate it with `security.trusted_reporters`
+so only tickets from known reporters are picked up automatically.
+
+The unattended command is simply the batch form (no `--ticket`):
+
+```bash
+php bin/console ia:auto-dev --source=jira --limit=5 --agent=claude
+```
+
+**GitLab — scheduled pipeline.** Add a job that installs the agent CLI and runs the
+command, then create a *pipeline schedule* (Settings → CI/CD → Pipeline schedules):
+
+```yaml
+# .gitlab-ci.yml
+ticket-pilot:
+  stage: build
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "schedule"'   # only on the schedule
+  script:
+    - curl -fsSL https://cursor.com/install | bash   # or install Claude Code
+    - php bin/console ia:auto-dev --source=jira --limit=5
+```
+
+**GitHub Actions — cron.** Same idea with a `schedule` trigger (and/or the
+`repository_dispatch` workflow shown above for on-demand runs):
+
+```yaml
+# .github/workflows/ticket-pilot.yml
+on:
+  schedule:
+    - cron: '0 7 * * 1-5'   # every weekday at 07:00 UTC
+jobs:
+  pilot:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      # ... setup PHP, install deps and the agent CLI ...
+      - run: php bin/console ia:auto-dev --source=github --limit=5
+```
+
+**Plain server — cron / systemd timer.** On a throwaway worker that has the repo, the
+agent CLI and the tokens:
+
+```cron
+# every 30 min, pick up to 3 pending tickets
+*/30 * * * * cd /srv/app && php bin/console ia:auto-dev --source=jira --limit=3 >> var/log/ticket-pilot.log 2>&1
+```
+
+> Tip: listen to the `TicketProcessed` / `TicketFailed` events (see [Events](#events)) to
+> post results to Slack and to alert on failures from these unattended runs.
 
 ## Extending
 
