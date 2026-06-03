@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace TheBenBenJ\TicketPilotBundle\Service;
 
+use Symfony\Component\Lock\LockFactory;
 use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
 use TheBenBenJ\TicketPilotBundle\Contract\PromptBuilderInterface;
 use TheBenBenJ\TicketPilotBundle\Contract\QualityGateInterface;
@@ -12,6 +13,7 @@ use TheBenBenJ\TicketPilotBundle\Contract\VcsProviderInterface;
 use TheBenBenJ\TicketPilotBundle\Event\TicketFailedEvent;
 use TheBenBenJ\TicketPilotBundle\Event\TicketProcessedEvent;
 use TheBenBenJ\TicketPilotBundle\Exception\QualityGateFailedException;
+use TheBenBenJ\TicketPilotBundle\Exception\TicketLockedException;
 use TheBenBenJ\TicketPilotBundle\Git\GitInterface;
 use TheBenBenJ\TicketPilotBundle\Model\Ticket;
 use TheBenBenJ\TicketPilotBundle\Registry\AgentRegistry;
@@ -25,9 +27,13 @@ use TheBenBenJ\TicketPilotBundle\Registry\AgentRegistry;
  */
 final class AutoDevRunner
 {
+    private const LOCK_PREFIX = 'ticket-pilot-';
+
     /**
      * @param QualityGateInterface|null     $qualityGate When set, runs after the agent and before push
      * @param EventDispatcherInterface|null $dispatcher  When set, emits TicketProcessedEvent / TicketFailedEvent
+     * @param LockFactory|null              $lockFactory When set, takes a per-ticket lock so concurrent runs
+     *                                                   (batch / cron) never process the same ticket twice
      */
     public function __construct(
         private readonly AgentRegistry $agents,
@@ -39,12 +45,14 @@ final class AutoDevRunner
         private readonly AutoDevOptions $options = new AutoDevOptions(),
         private readonly ?QualityGateInterface $qualityGate = null,
         private readonly ?EventDispatcherInterface $dispatcher = null,
+        private readonly ?LockFactory $lockFactory = null,
     ) {
     }
 
     /**
      * @param callable(string):void|null $onOutput Streamed agent-output callback
      *
+     * @throws TicketLockedException      when another run already holds the ticket's lock
      * @throws QualityGateFailedException when the quality gate fails and the policy is "abort"
      * @throws \RuntimeException          when the branch already exists or any step fails
      */
@@ -57,55 +65,64 @@ final class AutoDevRunner
         $agent = $this->agents->get($agentName);
         $plan = $this->branchPlanner->plan($ticket);
 
-        if ($this->git->localBranchExists($plan->branch)) {
-            throw new \RuntimeException(\sprintf('Local branch "%s" already exists', $plan->branch));
+        $lock = $this->lockFactory?->createLock(self::LOCK_PREFIX.$ticket->key, (float) $this->options->lockTtl);
+        if (null !== $lock && !$lock->acquire()) {
+            throw new TicketLockedException($ticket->key);
         }
-        if ($this->git->remoteBranchExists($plan->branch)) {
-            throw new \RuntimeException(\sprintf('Remote branch "%s" already exists', $plan->branch));
-        }
-
-        $this->git->createBranch($plan->branch, $plan->base);
-
-        $pushed = false;
 
         try {
-            $prompt = $this->promptBuilder->build($ticket);
-            $result = $agent->run($prompt, $model, $onOutput);
-
-            $qualityFailure = $this->runQualityGate();
-
-            $this->git->commitAndPush(
-                $plan->branch,
-                $this->mergeRequestFactory->commitMessage($ticket),
-                $this->options->excludePaths,
-            );
-            $pushed = true;
-
-            $draft = $this->options->draft || null !== $qualityFailure;
-
-            $mergeRequest = $this->vcs->createMergeRequest(
-                $plan->branch,
-                $plan->base,
-                $this->mergeRequestFactory->title($ticket),
-                $this->mergeRequestFactory->description($ticket, $result->output, $qualityFailure),
-                $draft,
-            );
-
-            $outcome = new AutoDevOutcome($ticket->key, $plan, $mergeRequest);
-            $this->dispatcher?->dispatch(new TicketProcessedEvent($ticket, $outcome));
-
-            return $outcome;
-        } catch (\Throwable $e) {
-            if ($this->options->cleanupOnFailure) {
-                if ($pushed) {
-                    $this->git->deleteRemoteBranch($plan->branch);
-                }
-                $this->git->deleteLocalBranch($plan->branch, $plan->base);
+            if ($this->git->localBranchExists($plan->branch)) {
+                throw new \RuntimeException(\sprintf('Local branch "%s" already exists', $plan->branch));
+            }
+            if ($this->git->remoteBranchExists($plan->branch)) {
+                throw new \RuntimeException(\sprintf('Remote branch "%s" already exists', $plan->branch));
             }
 
-            $this->dispatcher?->dispatch(new TicketFailedEvent($ticket, $e));
+            $this->git->createBranch($plan->branch, $plan->base);
 
-            throw $e;
+            $pushed = false;
+
+            try {
+                $prompt = $this->promptBuilder->build($ticket);
+                $result = $agent->run($prompt, $model, $onOutput);
+
+                $qualityFailure = $this->runQualityGate();
+
+                $this->git->commitAndPush(
+                    $plan->branch,
+                    $this->mergeRequestFactory->commitMessage($ticket),
+                    $this->options->excludePaths,
+                );
+                $pushed = true;
+
+                $draft = $this->options->draft || null !== $qualityFailure;
+
+                $mergeRequest = $this->vcs->createMergeRequest(
+                    $plan->branch,
+                    $plan->base,
+                    $this->mergeRequestFactory->title($ticket),
+                    $this->mergeRequestFactory->description($ticket, $result->output, $qualityFailure),
+                    $draft,
+                );
+
+                $outcome = new AutoDevOutcome($ticket->key, $plan, $mergeRequest);
+                $this->dispatcher?->dispatch(new TicketProcessedEvent($ticket, $outcome));
+
+                return $outcome;
+            } catch (\Throwable $e) {
+                if ($this->options->cleanupOnFailure) {
+                    if ($pushed) {
+                        $this->git->deleteRemoteBranch($plan->branch);
+                    }
+                    $this->git->deleteLocalBranch($plan->branch, $plan->base);
+                }
+
+                $this->dispatcher?->dispatch(new TicketFailedEvent($ticket, $e));
+
+                throw $e;
+            }
+        } finally {
+            $lock?->release();
         }
     }
 

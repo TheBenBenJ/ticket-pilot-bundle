@@ -299,6 +299,7 @@ final class TicketPilotExtension extends Extension
             $config['merge_request']['draft'],
             $config['quality']['on_failure'],
             $config['cleanup_branch_on_failure'],
+            $config['agent_timeout'],
         ]);
 
         $container->setDefinition(AutoDevRunner::class, new Definition(AutoDevRunner::class, [
@@ -311,6 +312,7 @@ final class TicketPilotExtension extends Extension
             $options,
             $config['quality']['enabled'] ? new Reference(QualityGateInterface::class) : null,
             new Reference('event_dispatcher', ContainerBuilder::NULL_ON_INVALID_REFERENCE),
+            new Reference('lock.factory', ContainerBuilder::NULL_ON_INVALID_REFERENCE),
         ]));
 
         $this->registerCommand($container, AutoDevCommand::class, [

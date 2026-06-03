@@ -28,12 +28,14 @@
         "phpunit/phpunit": "^10.5 || ^11.0",
         "symfony/framework-bundle": "^6.4 || ^7.0",
         "symfony/http-client": "^6.4 || ^7.0",
+        "symfony/lock": "^6.4 || ^7.0",
         "symfony/routing": "^6.4 || ^7.0",
         "symfony/yaml": "^6.4 || ^7.0"
     },
     "suggest": {
         "symfony/http-client": "Required by the bundled Jira, Sentry and GitLab integrations",
-        "symfony/routing": "Required to expose the pipeline-trigger HTTP endpoint"
+        "symfony/routing": "Required to expose the pipeline-trigger HTTP endpoint",
+        "symfony/lock": "Enables per-ticket locking so concurrent batch/cron runs never process the same ticket twice (configure framework.lock)"
     },
     "autoload": {
         "psr-4": {

@@ -21,12 +21,15 @@ final readonly class AutoDevOptions
      *                                       with the failing checks)
      * @param bool         $cleanupOnFailure Delete the branch created for the ticket (locally, and
      *                                       remotely if it was pushed) when the run fails
+     * @param int          $lockTtl          TTL (seconds) of the per-ticket lock, when a lock factory
+     *                                       is wired; should cover the longest expected run
      */
     public function __construct(
         public array $excludePaths = [],
         public bool $draft = false,
         public string $onQualityFailure = self::ON_QUALITY_FAILURE_ABORT,
         public bool $cleanupOnFailure = true,
+        public int $lockTtl = 3600,
     ) {
     }
 

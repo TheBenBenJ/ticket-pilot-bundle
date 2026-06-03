@@ -10,6 +10,7 @@ use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Style\SymfonyStyle;
+use TheBenBenJ\TicketPilotBundle\Exception\TicketLockedException;
 use TheBenBenJ\TicketPilotBundle\Registry\AgentRegistry;
 use TheBenBenJ\TicketPilotBundle\Registry\TicketSourceRegistry;
 use TheBenBenJ\TicketPilotBundle\Security\TicketGuard;
@@ -118,6 +119,7 @@ final class AutoDevCommand extends Command
 
         $succeeded = 0;
         $failed = 0;
+        $skipped = 0;
 
         foreach ($tickets as $ticket) {
             $plan = $this->branchPlanner->plan($ticket);
@@ -132,6 +134,10 @@ final class AutoDevCommand extends Command
                 );
                 $io->success(\sprintf('MR/PR #%d created: %s', $outcome->mergeRequest->number, $outcome->mergeRequest->url));
                 ++$succeeded;
+            } catch (TicketLockedException $e) {
+                // Another concurrent run owns this ticket — not a failure, just skip it.
+                $io->note($e->getMessage());
+                ++$skipped;
             } catch (\Throwable $e) {
                 $io->error(\sprintf('%s: %s', $ticket->key, $e->getMessage()));
                 ++$failed;
@@ -140,6 +146,9 @@ final class AutoDevCommand extends Command
 
         $io->section('Summary');
         $io->writeln(\sprintf('Succeeded: %d', $succeeded));
+        if ($skipped > 0) {
+            $io->writeln(\sprintf('Skipped (locked): %d', $skipped));
+        }
         if ($failed > 0) {
             $io->warning(\sprintf('Failed: %d', $failed));
         }

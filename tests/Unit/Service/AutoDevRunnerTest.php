@@ -6,6 +6,8 @@ namespace TheBenBenJ\TicketPilotBundle\Tests\Unit\Service;
 
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;
+use Symfony\Component\Lock\LockFactory;
+use Symfony\Component\Lock\Store\InMemoryStore;
 use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
 use TheBenBenJ\TicketPilotBundle\Contract\CodingAgentInterface;
 use TheBenBenJ\TicketPilotBundle\Contract\PromptBuilderInterface;
@@ -15,6 +17,7 @@ use TheBenBenJ\TicketPilotBundle\Contract\VcsProviderInterface;
 use TheBenBenJ\TicketPilotBundle\Event\TicketFailedEvent;
 use TheBenBenJ\TicketPilotBundle\Event\TicketProcessedEvent;
 use TheBenBenJ\TicketPilotBundle\Exception\QualityGateFailedException;
+use TheBenBenJ\TicketPilotBundle\Exception\TicketLockedException;
 use TheBenBenJ\TicketPilotBundle\Git\GitInterface;
 use TheBenBenJ\TicketPilotBundle\Model\AgentResult;
 use TheBenBenJ\TicketPilotBundle\Model\MergeRequest;
@@ -135,7 +138,38 @@ final class AutoDevRunnerTest extends TestCase
         $this->runner($this->git(), $vcs, $this->gate(true), new AutoDevOptions(), $dispatcher)->process($this->ticket(), 'cursor');
     }
 
-    private function runner(GitInterface $git, VcsProviderInterface $vcs, ?QualityGateInterface $gate, AutoDevOptions $options, ?EventDispatcherInterface $dispatcher = null): AutoDevRunner
+    public function testTicketAlreadyLockedIsSkipped(): void
+    {
+        $store = new InMemoryStore();
+        $factory = new LockFactory($store);
+        // Simulate a concurrent run holding the ticket's lock.
+        $held = $factory->createLock('ticket-pilot-PROJ-1');
+        self::assertTrue($held->acquire());
+
+        $git = $this->git();
+        $git->expects(self::never())->method('createBranch');
+
+        $runner = $this->runner($git, $this->createMock(VcsProviderInterface::class), null, new AutoDevOptions(), null, $factory);
+
+        $this->expectException(TicketLockedException::class);
+        $runner->process($this->ticket(), 'cursor');
+    }
+
+    public function testLockIsReleasedAfterTheRun(): void
+    {
+        $store = new InMemoryStore();
+        $factory = new LockFactory($store);
+
+        $vcs = $this->createMock(VcsProviderInterface::class);
+        $vcs->method('createMergeRequest')->willReturn(new MergeRequest(1, 'https://mr/1'));
+
+        $this->runner($this->git(), $vcs, null, new AutoDevOptions(), null, $factory)->process($this->ticket(), 'cursor');
+
+        // The lock must be free again once the run finished.
+        self::assertTrue($factory->createLock('ticket-pilot-PROJ-1')->acquire());
+    }
+
+    private function runner(GitInterface $git, VcsProviderInterface $vcs, ?QualityGateInterface $gate, AutoDevOptions $options, ?EventDispatcherInterface $dispatcher = null, ?LockFactory $lockFactory = null): AutoDevRunner
     {
         $agent = $this->createStub(CodingAgentInterface::class);
         $agent->method('getName')->willReturn('cursor');
@@ -154,6 +188,7 @@ final class AutoDevRunnerTest extends TestCase
             $options,
             $gate,
             $dispatcher,
+            $lockFactory,
         );
     }
 
