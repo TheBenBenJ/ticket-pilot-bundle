@@ -23,21 +23,23 @@ abstract class AbstractCliAgent implements CodingAgentInterface
     public function run(string $prompt, ?string $model = null, ?callable $onOutput = null): AgentResult
     {
         $process = $this->createProcess($prompt, $model);
-        $process->setTimeout($this->timeout);
+        $process->setTimeout((float) $this->timeout);
 
         $output = '';
+        $startedAt = microtime(true);
         $process->run(static function (string $type, string $buffer) use (&$output, $onOutput): void {
             $output .= $buffer;
             if (null !== $onOutput) {
                 $onOutput($buffer);
             }
         });
+        $duration = microtime(true) - $startedAt;
 
         if (!$process->isSuccessful()) {
             throw new \RuntimeException(\sprintf('Agent "%s" failed: %s', $this->getName(), $process->getErrorOutput() ?: $output));
         }
 
-        return new AgentResult(true, $output);
+        return new AgentResult(true, $output, $duration);
     }
 
     /**

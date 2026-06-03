@@ -86,6 +86,9 @@ final class AutoDevRunner
                 $prompt = $this->promptBuilder->build($ticket);
                 $result = $agent->run($prompt, $model, $onOutput);
 
+                // Capture what the agent touched before the commit cleans the tree.
+                $filesChanged = $this->git->changedFiles();
+
                 $qualityFailure = $this->runQualityGate();
 
                 $this->git->commitAndPush(
@@ -105,7 +108,7 @@ final class AutoDevRunner
                     $draft,
                 );
 
-                $outcome = new AutoDevOutcome($ticket->key, $plan, $mergeRequest);
+                $outcome = new AutoDevOutcome($ticket->key, $plan, $mergeRequest, $result->duration, $filesChanged);
                 $this->dispatcher?->dispatch(new TicketProcessedEvent($ticket, $outcome));
 
                 return $outcome;

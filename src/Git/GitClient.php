@@ -44,6 +44,23 @@ final class GitClient implements GitInterface
         return '' !== trim($process->getOutput());
     }
 
+    public function changedFiles(): array
+    {
+        $process = $this->process(['status', '--porcelain']);
+        $process->run();
+
+        $files = [];
+        foreach (preg_split('/\r?\n/', trim($process->getOutput())) ?: [] as $line) {
+            if ('' === $line) {
+                continue;
+            }
+            // Porcelain lines are "XY <path>"; drop the 2-char status + space.
+            $files[] = trim(substr($line, 3));
+        }
+
+        return array_values(array_filter($files));
+    }
+
     public function createBranch(string $branch, string $base): void
     {
         $this->mustRun(['fetch', 'origin', $base]);

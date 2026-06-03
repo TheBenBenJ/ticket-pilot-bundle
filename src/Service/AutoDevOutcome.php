@@ -12,10 +12,16 @@ use TheBenBenJ\TicketPilotBundle\Model\MergeRequest;
  */
 final readonly class AutoDevOutcome
 {
+    /**
+     * @param float        $duration     Wall-clock seconds the coding agent ran
+     * @param list<string> $filesChanged Working-tree paths the agent changed
+     */
     public function __construct(
         public string $ticketKey,
         public BranchPlan $branchPlan,
         public MergeRequest $mergeRequest,
+        public float $duration = 0.0,
+        public array $filesChanged = [],
     ) {
     }
 }

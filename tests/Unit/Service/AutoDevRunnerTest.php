@@ -138,6 +138,20 @@ final class AutoDevRunnerTest extends TestCase
         $this->runner($this->git(), $vcs, $this->gate(true), new AutoDevOptions(), $dispatcher)->process($this->ticket(), 'cursor');
     }
 
+    public function testOutcomeCarriesAgentDurationAndChangedFiles(): void
+    {
+        $git = $this->git();
+        $git->method('changedFiles')->willReturn(['src/A.php', 'src/B.php']);
+
+        $vcs = $this->createMock(VcsProviderInterface::class);
+        $vcs->method('createMergeRequest')->willReturn(new MergeRequest(1, 'https://mr/1'));
+
+        $outcome = $this->runner($git, $vcs, null, new AutoDevOptions())->process($this->ticket(), 'cursor');
+
+        self::assertSame(1.5, $outcome->duration);
+        self::assertSame(['src/A.php', 'src/B.php'], $outcome->filesChanged);
+    }
+
     public function testTicketAlreadyLockedIsSkipped(): void
     {
         $store = new InMemoryStore();
@@ -173,7 +187,7 @@ final class AutoDevRunnerTest extends TestCase
     {
         $agent = $this->createStub(CodingAgentInterface::class);
         $agent->method('getName')->willReturn('cursor');
-        $agent->method('run')->willReturn(new AgentResult(true, 'agent output'));
+        $agent->method('run')->willReturn(new AgentResult(true, 'agent output', 1.5));
 
         $promptBuilder = $this->createStub(PromptBuilderInterface::class);
         $promptBuilder->method('build')->willReturn('prompt');

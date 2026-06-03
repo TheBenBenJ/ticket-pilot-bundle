@@ -18,6 +18,13 @@ interface GitInterface
 
     public function hasChanges(): bool;
 
+    /**
+     * Paths changed in the working tree (modified, added or untracked).
+     *
+     * @return list<string>
+     */
+    public function changedFiles(): array;
+
     public function createBranch(string $branch, string $base): void;
 
     /**
