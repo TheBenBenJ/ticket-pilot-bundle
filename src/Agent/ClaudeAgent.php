@@ -5,13 +5,13 @@ declare(strict_types=1);
 namespace TheBenBenJ\TicketPilotBundle\Agent;
 
 use Symfony\Component\Process\Process;
-use TheBenBenJ\TicketPilotBundle\Model\AgentResult;
 
 /**
- * Drives the Claude Code CLI in headless mode.
+ * Drives the Claude Code CLI in headless print mode (`claude -p`), feeding the
+ * prompt on stdin.
  *
- * The prompt is written to a temporary file and passed via `-p "$(cat …)"` to
- * avoid argument-length and shell-escaping limits on large prompts.
+ * The process is built as an argument list (no shell), so a malicious ticket can
+ * never inject shell commands through the prompt, the binary name or the model.
  */
 final class ClaudeAgent extends AbstractCliAgent
 {
@@ -29,30 +29,22 @@ final class ClaudeAgent extends AbstractCliAgent
         return 'claude';
     }
 
-    public function run(string $prompt, ?string $model = null, ?callable $onOutput = null): AgentResult
+    protected function createProcess(string $prompt, ?string $model): Process
     {
-        $promptFile = tempnam(sys_get_temp_dir(), 'ia_prompt_');
-        if (false === $promptFile) {
-            throw new \RuntimeException('Unable to create a temporary prompt file');
+        $args = [$this->binary];
+        if ($this->skipPermissions) {
+            $args[] = '--dangerously-skip-permissions';
         }
-
-        file_put_contents($promptFile, $prompt);
-
-        try {
-            return parent::run($promptFile, $model, $onOutput);
-        } finally {
-            @unlink($promptFile);
-        }
-    }
-
-    protected function createProcess(string $promptFile, ?string $model): Process
-    {
-        $flags = $this->skipPermissions ? ' --dangerously-skip-permissions' : '';
-        $command = \sprintf('%s%s -p "$(cat %s)"', $this->binary, $flags, escapeshellarg($promptFile));
+        $args[] = '-p';
         if (null !== $model && '' !== $model) {
-            $command .= \sprintf(' --model %s', escapeshellarg($model));
+            $args[] = '--model';
+            $args[] = $model;
         }
 
-        return Process::fromShellCommandline($command, $this->projectDir);
+        // No shell: the prompt is fed on stdin, never interpolated into a command.
+        $process = new Process($args, $this->projectDir);
+        $process->setInput($prompt);
+
+        return $process;
     }
 }
