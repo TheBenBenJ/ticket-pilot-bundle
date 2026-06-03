@@ -5,6 +5,29 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] - 2026-06-02
+
+### Security
+- `ClaudeAgent` no longer builds a shell command line (`Process::fromShellCommandline`
+  with the binary, flags and a temp-file prompt). It now uses an argv process feeding
+  the prompt on stdin, removing a shell-injection surface.
+
+### Added
+- **Per-ticket distributed lock** (`symfony/lock`, optional): when a `lock.factory` is
+  available, concurrent batch/cron runs never process the same ticket twice; a held
+  ticket is reported as *skipped*. TTL defaults to the agent timeout.
+- **Report back to the source**: optional `TicketReporterInterface`; Jira and GitHub
+  sources post a comment with the MR/PR URL after it is opened (best-effort).
+- **Project convention files in the prompt**: `prompt.convention_files` (e.g. `CLAUDE.md`,
+  `.cursor/rules/*.md`) are read at run time and injected as trusted guidelines.
+- **Run metrics**: `AgentResult::$duration` and `AutoDevOutcome::{$duration,$filesChanged}`
+  (via `GitInterface::changedFiles()`), surfaced to `TicketProcessedEvent` listeners.
+- **Configurable git timeout**: `git_timeout` (default 120s) replaces the hard-coded
+  per-operation timeouts.
+
+### Changed
+- `ia:auto-dev` summary now reports a "Skipped (locked)" count.
+
 ## [0.1.1] - 2026-06-01
 
 ### Fixed

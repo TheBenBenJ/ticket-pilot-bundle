@@ -118,8 +118,9 @@ ticket_pilot:
         language: 'English'
         quality_commands: ['make check', 'make test']
         extra_instructions: |
-            Follow the conventions in CLAUDE.md.
             Never run destructive database or build commands.
+        # Read at run time and injected as trusted guidelines (globs supported):
+        convention_files: ['CLAUDE.md', '.cursor/rules/*.md']
 
     branching:
         feature_base: develop
@@ -262,6 +263,9 @@ agent CLI and the tokens:
 # every 30 min, pick up to 3 pending tickets
 */30 * * * * cd /srv/app && php bin/console ia:auto-dev --source=jira --limit=3 >> var/log/ticket-pilot.log 2>&1
 ```
+
+> Concurrency: configure `framework.lock` so two overlapping schedules never process the
+> same ticket twice — Ticket Pilot takes a per-ticket lock and reports duplicates as skipped.
 
 > Tip: listen to the `TicketProcessed` / `TicketFailed` events (see [Events](#events)) to
 > post results to Slack and to alert on failures from these unattended runs.
