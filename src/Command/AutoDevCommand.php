@@ -131,6 +131,7 @@ final class AutoDevCommand extends Command
                     $agentName,
                     $model,
                     static fn (string $buffer) => $output->write($buffer),
+                    $source,
                 );
                 $io->success(\sprintf('MR/PR #%d created: %s', $outcome->mergeRequest->number, $outcome->mergeRequest->url));
                 ++$succeeded;

@@ -7,6 +7,8 @@ namespace TheBenBenJ\TicketPilotBundle\Tests\Unit\Source;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\HttpClient\MockHttpClient;
 use Symfony\Component\HttpClient\Response\MockResponse;
+use TheBenBenJ\TicketPilotBundle\Model\MergeRequest;
+use TheBenBenJ\TicketPilotBundle\Model\Ticket;
 use TheBenBenJ\TicketPilotBundle\Source\GitHubIssueSource;
 
 final class GitHubIssueSourceTest extends TestCase
@@ -54,6 +56,24 @@ final class GitHubIssueSourceTest extends TestCase
         self::assertSame(['bug', 'ia'], $ticket->labels);
         self::assertSame(['[alice] Reproduced.'], $ticket->comments);
         self::assertSame('dev', $ticket->assignee);
+    }
+
+    public function testReportMergeRequestPostsACommentOnTheIssue(): void
+    {
+        $url = null;
+        $body = null;
+        $client = new MockHttpClient(static function (string $method, string $u, array $options) use (&$url, &$body): MockResponse {
+            $url = $u;
+            $body = $options['body'] ?? '';
+
+            return new MockResponse('{}', ['http_code' => 201]);
+        });
+
+        $ticket = new Ticket('42', 'Bug', 'desc', 'Bug', 'github');
+        $this->source($client)->reportMergeRequest($ticket, new MergeRequest(9, 'https://github.com/acme/app/pull/9'));
+
+        self::assertStringContainsString('/issues/42/comments', (string) $url);
+        self::assertStringContainsString('https://github.com/acme/app/pull/9', stripslashes((string) $body));
     }
 
     private function source(MockHttpClient $client): GitHubIssueSource

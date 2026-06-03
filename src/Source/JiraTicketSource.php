@@ -8,7 +8,9 @@ use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
 use Symfony\Contracts\HttpClient\Exception\ExceptionInterface as HttpExceptionInterface;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
+use TheBenBenJ\TicketPilotBundle\Contract\TicketReporterInterface;
 use TheBenBenJ\TicketPilotBundle\Contract\TicketSourceInterface;
+use TheBenBenJ\TicketPilotBundle\Model\MergeRequest;
 use TheBenBenJ\TicketPilotBundle\Model\Ticket;
 
 /**
@@ -17,7 +19,7 @@ use TheBenBenJ\TicketPilotBundle\Model\Ticket;
  * Pending tickets are selected by JQL: a configurable label at a configurable
  * status, ordered by priority then creation date.
  */
-final class JiraTicketSource implements TicketSourceInterface
+final class JiraTicketSource implements TicketSourceInterface, TicketReporterInterface
 {
     private const NAME = 'jira';
 
@@ -95,6 +97,28 @@ final class JiraTicketSource implements TicketSourceInterface
             $this->logger->error(\sprintf('JiraTicketSource::fetchOne(%s) failed: %s', $key, $e->getMessage()));
 
             throw new \RuntimeException(\sprintf('Unable to fetch Jira ticket %s', $key), 0, $e);
+        }
+    }
+
+    public function reportMergeRequest(Ticket $ticket, MergeRequest $mergeRequest): void
+    {
+        $text = \sprintf('🤖 Merge request opened: %s', $mergeRequest->url);
+
+        try {
+            $this->client->request('POST', \sprintf('rest/api/3/issue/%s/comment', $ticket->key), [
+                'json' => [
+                    'body' => [
+                        'type' => 'doc',
+                        'version' => 1,
+                        'content' => [[
+                            'type' => 'paragraph',
+                            'content' => [['type' => 'text', 'text' => $text]],
+                        ]],
+                    ],
+                ],
+            ])->getStatusCode();
+        } catch (HttpExceptionInterface $e) {
+            $this->logger->warning(\sprintf('JiraTicketSource::reportMergeRequest(%s) failed: %s', $ticket->key, $e->getMessage()));
         }
     }
 

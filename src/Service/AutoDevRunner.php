@@ -9,6 +9,8 @@ use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
 use TheBenBenJ\TicketPilotBundle\Contract\PromptBuilderInterface;
 use TheBenBenJ\TicketPilotBundle\Contract\QualityGateInterface;
 use TheBenBenJ\TicketPilotBundle\Contract\QualityReport;
+use TheBenBenJ\TicketPilotBundle\Contract\TicketReporterInterface;
+use TheBenBenJ\TicketPilotBundle\Contract\TicketSourceInterface;
 use TheBenBenJ\TicketPilotBundle\Contract\VcsProviderInterface;
 use TheBenBenJ\TicketPilotBundle\Event\TicketFailedEvent;
 use TheBenBenJ\TicketPilotBundle\Event\TicketProcessedEvent;
@@ -61,6 +63,7 @@ final class AutoDevRunner
         string $agentName,
         ?string $model = null,
         ?callable $onOutput = null,
+        ?TicketSourceInterface $source = null,
     ): AutoDevOutcome {
         $agent = $this->agents->get($agentName);
         $plan = $this->branchPlanner->plan($ticket);
@@ -107,6 +110,14 @@ final class AutoDevRunner
                     $this->mergeRequestFactory->description($ticket, $result->output, $qualityFailure),
                     $draft,
                 );
+
+                if ($source instanceof TicketReporterInterface) {
+                    // Best-effort: reporting back must never fail the run.
+                    try {
+                        $source->reportMergeRequest($ticket, $mergeRequest);
+                    } catch (\Throwable) {
+                    }
+                }
 
                 $outcome = new AutoDevOutcome($ticket->key, $plan, $mergeRequest, $result->duration, $filesChanged);
                 $this->dispatcher?->dispatch(new TicketProcessedEvent($ticket, $outcome));

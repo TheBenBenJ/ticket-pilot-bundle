@@ -8,7 +8,9 @@ use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
 use Symfony\Contracts\HttpClient\Exception\ExceptionInterface as HttpExceptionInterface;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
+use TheBenBenJ\TicketPilotBundle\Contract\TicketReporterInterface;
 use TheBenBenJ\TicketPilotBundle\Contract\TicketSourceInterface;
+use TheBenBenJ\TicketPilotBundle\Model\MergeRequest;
 use TheBenBenJ\TicketPilotBundle\Model\Ticket;
 
 /**
@@ -19,7 +21,7 @@ use TheBenBenJ\TicketPilotBundle\Model\Ticket;
  * key is the issue number; an issue carrying the configured bug label is typed
  * as a bug so the branch planner routes it to the hotfix flow.
  */
-final class GitHubIssueSource implements TicketSourceInterface
+final class GitHubIssueSource implements TicketSourceInterface, TicketReporterInterface
 {
     private const NAME = 'github';
 
@@ -107,6 +109,21 @@ final class GitHubIssueSource implements TicketSourceInterface
             $this->logger->error(\sprintf('GitHubIssueSource::fetchOne(%s) failed: %s', $number, $e->getMessage()));
 
             throw new \RuntimeException(\sprintf('Unable to fetch GitHub issue %s', $number), 0, $e);
+        }
+    }
+
+    public function reportMergeRequest(Ticket $ticket, MergeRequest $mergeRequest): void
+    {
+        $number = preg_replace('/\D+/', '', $ticket->key) ?: $ticket->key;
+
+        try {
+            $this->client->request(
+                'POST',
+                \sprintf('repos/%s/%s/issues/%s/comments', $this->owner, $this->repo, $number),
+                ['json' => ['body' => \sprintf('🤖 Pull request opened: %s', $mergeRequest->url)]],
+            )->getStatusCode();
+        } catch (HttpExceptionInterface $e) {
+            $this->logger->warning(\sprintf('GitHubIssueSource::reportMergeRequest(%s) failed: %s', $number, $e->getMessage()));
         }
     }
 

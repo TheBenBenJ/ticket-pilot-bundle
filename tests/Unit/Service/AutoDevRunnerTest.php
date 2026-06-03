@@ -13,6 +13,8 @@ use TheBenBenJ\TicketPilotBundle\Contract\CodingAgentInterface;
 use TheBenBenJ\TicketPilotBundle\Contract\PromptBuilderInterface;
 use TheBenBenJ\TicketPilotBundle\Contract\QualityGateInterface;
 use TheBenBenJ\TicketPilotBundle\Contract\QualityReport;
+use TheBenBenJ\TicketPilotBundle\Contract\TicketReporterInterface;
+use TheBenBenJ\TicketPilotBundle\Contract\TicketSourceInterface;
 use TheBenBenJ\TicketPilotBundle\Contract\VcsProviderInterface;
 use TheBenBenJ\TicketPilotBundle\Event\TicketFailedEvent;
 use TheBenBenJ\TicketPilotBundle\Event\TicketProcessedEvent;
@@ -136,6 +138,20 @@ final class AutoDevRunnerTest extends TestCase
 
         $this->expectException(\RuntimeException::class);
         $this->runner($this->git(), $vcs, $this->gate(true), new AutoDevOptions(), $dispatcher)->process($this->ticket(), 'cursor');
+    }
+
+    public function testMergeRequestIsReportedBackToSourceWhenSupported(): void
+    {
+        $vcs = $this->createMock(VcsProviderInterface::class);
+        $vcs->method('createMergeRequest')->willReturn(new MergeRequest(7, 'https://mr/7'));
+
+        /** @var TicketSourceInterface&TicketReporterInterface&MockObject $source */
+        $source = $this->createMockForIntersectionOfInterfaces([TicketSourceInterface::class, TicketReporterInterface::class]);
+        $source->expects(self::once())->method('reportMergeRequest')
+            ->with(self::isInstanceOf(Ticket::class), self::isInstanceOf(MergeRequest::class));
+
+        $this->runner($this->git(), $vcs, null, new AutoDevOptions())
+            ->process($this->ticket(), 'cursor', null, null, $source);
     }
 
     public function testOutcomeCarriesAgentDurationAndChangedFiles(): void
