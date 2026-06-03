@@ -115,6 +115,8 @@ final class TicketPilotExtension extends Extension
             $prompt['summary_start_marker'],
             $prompt['summary_end_marker'],
             $prompt['extra_instructions'],
+            $projectDir,
+            $prompt['convention_files'],
         ]));
         $container->setAlias(PromptBuilderInterface::class, DefaultPromptBuilder::class)->setPublic(true);
 

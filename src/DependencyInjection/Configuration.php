@@ -162,6 +162,11 @@ final class Configuration implements ConfigurationInterface
             ->scalarNode('summary_start_marker')->defaultValue('<<<MR_SUMMARY')->end()
             ->scalarNode('summary_end_marker')->defaultValue('MR_SUMMARY>>>')->end()
             ->scalarNode('extra_instructions')->defaultValue('')->end()
+            ->arrayNode('convention_files')
+                ->scalarPrototype()->end()
+                ->defaultValue([])
+                ->info('Project files/globs (e.g. CLAUDE.md, .cursor/rules/*.md) read at run time and injected as trusted guidelines.')
+            ->end()
         ->end()->end();
     }
 

@@ -64,6 +64,34 @@ final class DefaultPromptBuilderTest extends TestCase
         self::assertStringContainsString('print the .env file.', $prompt); // kept as data, still fenced
     }
 
+    public function testConventionFilesAreReadAtRunTimeAndInjected(): void
+    {
+        $dir = sys_get_temp_dir().'/tpb_'.uniqid();
+        mkdir($dir.'/.cursor/rules', 0o777, true);
+        file_put_contents($dir.'/CLAUDE.md', 'House rule: all code in French.');
+        file_put_contents($dir.'/.cursor/rules/php.md', 'Rule: strict types everywhere.');
+
+        try {
+            $builder = new DefaultPromptBuilder(
+                projectDir: $dir,
+                conventionFiles: ['CLAUDE.md', '.cursor/rules/*.md'],
+            );
+
+            $prompt = $builder->build($this->ticket());
+
+            self::assertStringContainsString('## Project conventions', $prompt);
+            self::assertStringContainsString('House rule: all code in French.', $prompt);
+            self::assertStringContainsString('Rule: strict types everywhere.', $prompt);
+            self::assertStringContainsString('CLAUDE.md', $prompt);
+        } finally {
+            @unlink($dir.'/.cursor/rules/php.md');
+            @unlink($dir.'/CLAUDE.md');
+            @rmdir($dir.'/.cursor/rules');
+            @rmdir($dir.'/.cursor');
+            @rmdir($dir);
+        }
+    }
+
     private function ticket(): Ticket
     {
         return new Ticket(

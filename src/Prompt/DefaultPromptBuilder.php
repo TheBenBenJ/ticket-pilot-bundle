@@ -22,9 +22,13 @@ final class DefaultPromptBuilder implements PromptBuilderInterface
 {
     private const UNTRUSTED_OPEN = '[UNTRUSTED';
     private const UNTRUSTED_CLOSE = '[/UNTRUSTED';
+    private const CONVENTION_FILE_MAX_CHARS = 8000;
 
     /**
      * @param list<string> $qualityCommands Commands the agent must run before finishing (e.g. ['make check'])
+     * @param string       $projectDir      Directory the convention files are resolved against
+     * @param list<string> $conventionFiles Project convention files/globs (e.g. CLAUDE.md, .cursor/rules/*.md)
+     *                                      read at run time and injected as trusted guidelines
      */
     public function __construct(
         private readonly string $language = 'English',
@@ -32,6 +36,8 @@ final class DefaultPromptBuilder implements PromptBuilderInterface
         private readonly string $summaryStartMarker = '<<<MR_SUMMARY',
         private readonly string $summaryEndMarker = 'MR_SUMMARY>>>',
         private readonly string $extraInstructions = '',
+        private readonly string $projectDir = '',
+        private readonly array $conventionFiles = [],
     ) {
     }
 
@@ -77,6 +83,47 @@ final class DefaultPromptBuilder implements PromptBuilderInterface
         return \sprintf("%s:%s]\n%s\n%s:%s]", self::UNTRUSTED_OPEN, $label, $clean, self::UNTRUSTED_CLOSE, $label);
     }
 
+    /**
+     * Trusted project conventions: the configured extra instructions plus the
+     * contents of the convention files (CLAUDE.md, .cursor/rules/*.md, …) read
+     * at run time. These are maintainer-authored, so they are NOT fenced.
+     */
+    private function conventions(): string
+    {
+        $parts = [];
+
+        $extra = trim($this->extraInstructions);
+        if ('' !== $extra) {
+            $parts[] = $extra;
+        }
+
+        foreach ($this->conventionFiles as $pattern) {
+            foreach ($this->resolveConventionFiles($pattern) as $file) {
+                $content = is_file($file) ? (string) file_get_contents($file) : '';
+                if ('' === trim($content)) {
+                    continue;
+                }
+
+                $relative = ltrim(str_replace($this->projectDir, '', $file), '/');
+                $parts[] = \sprintf("### %s\n%s", $relative, mb_substr(trim($content), 0, self::CONVENTION_FILE_MAX_CHARS));
+            }
+        }
+
+        return implode("\n\n", $parts);
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function resolveConventionFiles(string $pattern): array
+    {
+        $path = '' !== $this->projectDir ? rtrim($this->projectDir, '/').'/'.$pattern : $pattern;
+
+        $matches = glob($path);
+
+        return false === $matches ? [] : $matches;
+    }
+
     private function preamble(): string
     {
         return <<<PROMPT
@@ -119,8 +166,9 @@ final class DefaultPromptBuilder implements PromptBuilderInterface
         }
         $checks = rtrim($checks);
 
-        $extra = '' !== trim($this->extraInstructions)
-            ? "\n\n## Project conventions\n".trim($this->extraInstructions)
+        $conventions = $this->conventions();
+        $extra = '' !== $conventions
+            ? "\n\n## Project conventions\n".$conventions
             : '';
 
         return <<<PROMPT
