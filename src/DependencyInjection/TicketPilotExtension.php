@@ -101,7 +101,7 @@ final class TicketPilotExtension extends Extension
         $agentRegistry->setPublic(true);
         $container->setDefinition(AgentRegistry::class, $agentRegistry);
 
-        $container->setDefinition(GitClient::class, new Definition(GitClient::class, [$projectDir]));
+        $container->setDefinition(GitClient::class, new Definition(GitClient::class, [$projectDir, $config['git_timeout']]));
         $container->setAlias(GitInterface::class, GitClient::class);
 
         $container->setDefinition(TicketGuard::class, new Definition(TicketGuard::class, [

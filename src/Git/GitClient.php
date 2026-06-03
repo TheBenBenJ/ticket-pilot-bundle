@@ -16,12 +16,13 @@ final class GitClient implements GitInterface
 {
     public function __construct(
         private readonly string $projectDir,
+        private readonly int $timeout = 120,
     ) {
     }
 
     public function remoteBranchExists(string $branch): bool
     {
-        $process = $this->process(['ls-remote', '--heads', 'origin', $branch], 30);
+        $process = $this->process(['ls-remote', '--heads', 'origin', $branch]);
         $process->run();
 
         return '' !== trim($process->getOutput());
@@ -29,7 +30,7 @@ final class GitClient implements GitInterface
 
     public function localBranchExists(string $branch): bool
     {
-        $process = $this->process(['rev-parse', '--verify', 'refs/heads/'.$branch], 10);
+        $process = $this->process(['rev-parse', '--verify', 'refs/heads/'.$branch]);
         $process->run();
 
         return $process->isSuccessful();
@@ -37,7 +38,7 @@ final class GitClient implements GitInterface
 
     public function hasChanges(): bool
     {
-        $process = $this->process(['status', '--porcelain'], 10);
+        $process = $this->process(['status', '--porcelain']);
         $process->run();
 
         return '' !== trim($process->getOutput());
@@ -45,10 +46,10 @@ final class GitClient implements GitInterface
 
     public function createBranch(string $branch, string $base): void
     {
-        $this->mustRun(['fetch', 'origin', $base], 60);
-        $this->mustRun(['checkout', $base], 30);
-        $this->mustRun(['pull', 'origin', $base], 60);
-        $this->mustRun(['checkout', '-b', $branch], 30);
+        $this->mustRun(['fetch', 'origin', $base]);
+        $this->mustRun(['checkout', $base]);
+        $this->mustRun(['pull', 'origin', $base]);
+        $this->mustRun(['checkout', '-b', $branch]);
     }
 
     /**
@@ -57,8 +58,8 @@ final class GitClient implements GitInterface
      */
     public function deleteLocalBranch(string $branch, string $fallbackBranch): void
     {
-        $this->process(['checkout', $fallbackBranch], 30)->run();
-        $this->process(['branch', '-D', $branch], 30)->run();
+        $this->process(['checkout', $fallbackBranch])->run();
+        $this->process(['branch', '-D', $branch])->run();
     }
 
     /**
@@ -66,7 +67,7 @@ final class GitClient implements GitInterface
      */
     public function deleteRemoteBranch(string $branch): void
     {
-        $this->process(['push', 'origin', '--delete', $branch], 60)->run();
+        $this->process(['push', 'origin', '--delete', $branch])->run();
     }
 
     /**
@@ -78,31 +79,31 @@ final class GitClient implements GitInterface
      */
     public function commitAndPush(string $branch, string $message, array $excludePaths = []): void
     {
-        $this->mustRun(['add', '-A'], 30);
+        $this->mustRun(['add', '-A']);
 
         foreach ($excludePaths as $path) {
             $absolute = $this->projectDir.'/'.$path;
             if (is_file($absolute) || is_dir($absolute)) {
-                $this->mustRun(['reset', 'HEAD', '--', $path], 10);
+                $this->mustRun(['reset', 'HEAD', '--', $path]);
             }
         }
 
-        $staged = $this->process(['diff', '--cached', '--name-only'], 10);
+        $staged = $this->process(['diff', '--cached', '--name-only']);
         $staged->run();
         if ('' === trim($staged->getOutput())) {
             throw new \RuntimeException('No staged changes to commit');
         }
 
-        $this->mustRun(['commit', '-m', $message], 30);
-        $this->mustRun(['push', 'origin', $branch], 120);
+        $this->mustRun(['commit', '-m', $message]);
+        $this->mustRun(['push', 'origin', $branch]);
     }
 
     /**
      * @param list<string> $args
      */
-    private function mustRun(array $args, int $timeout): void
+    private function mustRun(array $args): void
     {
-        $process = $this->process($args, $timeout);
+        $process = $this->process($args);
         $process->run();
 
         if (!$process->isSuccessful()) {
@@ -113,12 +114,12 @@ final class GitClient implements GitInterface
     /**
      * @param list<string> $args
      */
-    private function process(array $args, int $timeout): Process
+    private function process(array $args): Process
     {
         $command = array_merge(['git', '-c', \sprintf('safe.directory=%s', $this->projectDir)], $args);
 
         $process = new Process($command, $this->projectDir);
-        $process->setTimeout($timeout);
+        $process->setTimeout((float) $this->timeout);
 
         return $process;
     }
