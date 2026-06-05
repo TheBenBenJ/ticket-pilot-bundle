@@ -34,7 +34,8 @@ final class AgentReviewRunner
     }
 
     /**
-     * @param callable(string):void|null $onOutput Streamed agent-output callback
+     * @param callable(string):void|null $onOutput  Streamed agent-output callback
+     * @param string|null                $agentName Agent to drive the review (null/'' = configured default)
      */
     public function run(
         Ticket $ticket,
@@ -42,7 +43,13 @@ final class AgentReviewRunner
         string $branch = '',
         ?string $model = null,
         ?callable $onOutput = null,
+        ?string $agentName = null,
     ): AgentReviewResult {
+        $name = (null !== $agentName && '' !== $agentName) ? $agentName : $this->agentName;
+        if (!$this->agents->has($name)) {
+            throw new \InvalidArgumentException(\sprintf('Unknown review agent "%s" (available: %s)', $name, implode(', ', $this->agents->names())));
+        }
+
         $mergeRequestDescription = ('' !== $branch && null !== $this->mergeRequestReader)
             ? $this->mergeRequestReader->mergeRequestDescription($branch)
             : '';
@@ -52,7 +59,7 @@ final class AgentReviewRunner
         $this->ensureScreenshotDir();
         $startedAt = time();
 
-        $result = $this->agents->get($this->agentName)->run($prompt, $model, $onOutput);
+        $result = $this->agents->get($name)->run($prompt, $model, $onOutput);
 
         $summary = $this->extractSummary($result->output);
         $screenshots = $this->selectReported($this->collectScreenshots($startedAt), $summary);
@@ -132,15 +139,17 @@ final class AgentReviewRunner
     }
 
     /**
-     * A review passes only when the summary explicitly states it did and never
-     * states it failed (a "failed" token always wins, so an ambiguous or empty
-     * summary is treated as a failure).
+     * A review passes only when the summary explicitly states it passed and
+     * never states it failed or could not be concluded. A "failed" or
+     * "inconclusive" token always wins, so a partial run (scenario not fully
+     * executed) or an ambiguous/empty summary is never reported as passed.
      */
     public function verdict(string $summary): bool
     {
         $normalized = mb_strtoupper($summary);
 
-        if (str_contains($normalized, AgentReviewPromptBuilder::FAIL_TOKEN)) {
+        if (str_contains($normalized, AgentReviewPromptBuilder::FAIL_TOKEN)
+            || str_contains($normalized, AgentReviewPromptBuilder::INCONCLUSIVE_TOKEN)) {
             return false;
         }
 

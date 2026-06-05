@@ -25,6 +25,7 @@ final class AgentReviewPromptBuilder
 {
     public const PASS_TOKEN = 'REVIEW PASSED';
     public const FAIL_TOKEN = 'REVIEW FAILED';
+    public const INCONCLUSIVE_TOKEN = 'REVIEW INCONCLUSIVE';
 
     private const UNTRUSTED_OPEN = '[UNTRUSTED';
     private const UNTRUSTED_CLOSE = '[/UNTRUSTED';
@@ -214,15 +215,33 @@ final class AgentReviewPromptBuilder
         $end = $this->summaryEndMarker;
         $pass = self::PASS_TOKEN;
         $fail = self::FAIL_TOKEN;
+        $inconclusive = self::INCONCLUSIVE_TOKEN;
 
         return <<<PROMPT
             ## Final verdict (MANDATORY)
             End your answer with a block delimited EXACTLY by the markers below. Its content is
             posted verbatim to the ticket: in {$this->language}, factual, no meta-commentary. The
-            FIRST line after the opening marker MUST be either `{$pass}` or `{$fail}`.
+            FIRST line after the opening marker MUST be EXACTLY one of `{$pass}`, `{$fail}` or `{$inconclusive}`.
+
+            Choose the token HONESTLY — a green screen is not a passed review:
+            - `{$pass}` ONLY if you actually executed the ticket's full functional scenario
+              end-to-end, with real data, AND observed the expected behaviour (and, for a defect,
+              reproduced the original case and confirmed it is fixed). Completing only part of the
+              scenario is NEVER a pass.
+            - `{$fail}` when you executed the scenario but observed a real defect, regression or error.
+            - `{$inconclusive}` when you could NOT execute the full scenario — e.g. the required test
+              data does not exist on this environment, you cannot reproduce the case, you are blocked
+              by login/permissions, or you cannot locate the impacted screen. Do NOT guess a pass:
+              an unverified scenario is inconclusive, not passed.
+
+            Always state, in "Scenario coverage" below, exactly which steps you completed and which
+            you could not — and why.
 
             {$start}
-            {$pass} | {$fail}
+            {$pass} | {$fail} | {$inconclusive}
+
+            ### Scenario coverage
+            - <which steps of the ticket scenario you ran, with the real data used; and any step you could NOT complete and why>
 
             ### Verified screens
             - <screen>: <result>

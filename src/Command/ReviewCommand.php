@@ -56,6 +56,7 @@ final class ReviewCommand extends Command
             ->addOption('url', 'u', InputOption::VALUE_REQUIRED, 'Base URL to test (overrides the configured pattern)')
             ->addOption('source', 's', InputOption::VALUE_REQUIRED, 'Ticket source ('.implode(', ', $this->sources->names()).')', $this->defaultSource)
             ->addOption('branch', 'b', InputOption::VALUE_REQUIRED, '[agent] Branch whose merge/pull request gives the development context')
+            ->addOption('agent', 'a', InputOption::VALUE_REQUIRED, '[agent] Coding agent driving the review (overrides review.agent)')
             ->addOption('model', 'm', InputOption::VALUE_REQUIRED, '[agent] Model the review agent should use')
             ->addOption('no-report', null, InputOption::VALUE_NONE, 'Do not post the result back to the ticket')
         ;
@@ -99,15 +100,23 @@ final class ReviewCommand extends Command
         }
 
         $model = $input->getOption('model');
-        $result = $this->agentRunner->run(
-            $ticket,
-            $url,
-            $branch,
-            \is_string($model) ? $model : null,
-            static function (string $chunk) use ($io): void {
-                $io->write($chunk);
-            },
-        );
+        $agent = $input->getOption('agent');
+        try {
+            $result = $this->agentRunner->run(
+                $ticket,
+                $url,
+                $branch,
+                \is_string($model) ? $model : null,
+                static function (string $chunk) use ($io): void {
+                    $io->write($chunk);
+                },
+                \is_string($agent) ? $agent : null,
+            );
+        } catch (\InvalidArgumentException $e) {
+            $io->error($e->getMessage());
+
+            return Command::INVALID;
+        }
 
         $io->newLine(2);
         $io->writeln($result->summary);
