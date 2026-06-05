@@ -4,6 +4,10 @@ Tracking of the analysis-driven improvements. Done items shipped in the version 
 
 ## Shipped
 
+### v0.4.0
+- 🔥 **Ticket attachments for the agent** — download Jira attachments, convert office docs
+  to PDF (LibreOffice), and list them in the prompt so the agent reads them.
+
 ### v0.3.0
 - 🔥 **Browser review** (`ia:review`) — the agent writes a YAML test recipe while
   implementing the ticket; the command replays it in headless Chromium, screenshots,

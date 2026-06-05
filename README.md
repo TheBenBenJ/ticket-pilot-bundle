@@ -311,6 +311,26 @@ ticket_pilot:
 > The step logic is engine-agnostic (`RecipeRunnerInterface` / `BrowserPageInterface`), so you
 > can plug in another browser engine.
 
+## Ticket attachments
+
+When enabled, the ticket's attachments are downloaded into a per-ticket folder before the
+agent runs, and the prompt lists them so the agent reads them for context. Office documents
+(`doc`/`docx`/`odt`/`rtf`) are converted to **PDF** (headless LibreOffice) so a PDF-capable
+agent can read them; images and PDFs are kept as-is.
+
+```yaml
+# config/packages/ticket_pilot.yaml
+ticket_pilot:
+    attachments:
+        enabled: true
+        # dir: 'var/ticket-pilot/attachments'
+        # convert_documents: true
+        # soffice_binary: 'soffice'   # LibreOffice, for docx -> pdf
+```
+
+> Requires LibreOffice (`soffice`) in the runtime for document conversion. Currently
+> implemented for the Jira source (`AttachmentDownloaderInterface`).
+
 ## Extending
 
 Jira, Sentry and GitHub Issues sources, GitLab and GitHub providers, and the
