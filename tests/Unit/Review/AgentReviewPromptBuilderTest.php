@@ -65,4 +65,14 @@ final class AgentReviewPromptBuilderTest extends TestCase
 
         self::assertStringContainsString('No credentials provided', $prompt);
     }
+
+    public function testPromptCarriesShellSafetyGuardrail(): void
+    {
+        $prompt = (new AgentReviewPromptBuilder())->build(new Ticket('LYSI-5', 't', 'd', 'Task', 'jira'), 'https://app.test');
+
+        self::assertStringContainsString('Running shell commands', $prompt);
+        self::assertStringContainsString('non-interactive', $prompt);
+        self::assertStringContainsString('BatchMode=yes', $prompt);
+        self::assertStringContainsString('never run it with empty arguments', $prompt);
+    }
 }

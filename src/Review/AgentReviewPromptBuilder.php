@@ -58,6 +58,7 @@ final class AgentReviewPromptBuilder
         $parts[] = $this->credentials($login, $password);
         $parts[] = $this->projectRules();
         $parts[] = $this->browserInstructions();
+        $parts[] = $this->shellSafety();
         $parts[] = $this->verdictInstructions();
 
         return implode("\n\n", array_filter($parts, static fn (string $p): bool => '' !== trim($p)));
@@ -159,6 +160,29 @@ final class AgentReviewPromptBuilder
             - Start from the deployed app URL and log in (see the project rules).
             - Navigate through the menus and the UI like a real user; do not guess raw URLs.
             - Take a screenshot of EVERY significant screen you verify, and of any error you hit.{$screenshots}
+            PROMPT;
+    }
+
+    /**
+     * Generic guardrail so an unattended review can never hang on an interactive
+     * command (a password / host-key prompt with no stdin is a classic deadlock).
+     * Project-specific commands live in the rules file; this enforces HOW to run any.
+     */
+    private function shellSafety(): string
+    {
+        return <<<PROMPT
+            ## Running shell commands (safety)
+            You may run shell commands (to drive a browser script, inspect routes, query test
+            data, …). EVERY command MUST be non-interactive and time-bounded so this unattended
+            run can NEVER hang:
+            - Never run a command that waits on stdin or shows an interactive prompt (password,
+              host-key confirmation, pager, REPL). Pass the flags that make it fail fast instead.
+            - For SSH/SCP always add `-o BatchMode=yes -o StrictHostKeyChecking=accept-new -o ConnectTimeout=8`.
+            - Wrap anything that may block in a timeout, e.g. `timeout 30 <command>`.
+            - If a value the command needs (host, path, token) is empty/unset, SKIP the command —
+              never run it with empty arguments. Guard it: `[ -n "\$VAR" ] && <command> || echo "skipped"`.
+            - On any command failure, continue the review through the UI; never retry an interactive
+              command and never wait for input.
             PROMPT;
     }
 

@@ -5,6 +5,16 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.1] - 2026-06-05
+
+### Added
+- **Agent review — shell-safety guardrail**: the review prompt now instructs the agent that any
+  shell command it runs MUST be non-interactive and time-bounded, so an unattended run can never
+  hang on an interactive prompt (the classic case: `ssh` to an empty/unset host waiting on a
+  password / host-key confirmation with no stdin). Adds generic rules: BatchMode/ConnectTimeout
+  for SSH, `timeout` wrapping, skip-when-empty guards, and "continue via the UI on failure".
+  This is generic robustness, so every project gets it without touching its review rules file.
+
 ## [0.5.0] - 2026-06-05
 
 ### Added
