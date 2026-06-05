@@ -270,6 +270,47 @@ agent CLI and the tokens:
 > Tip: listen to the `TicketProcessed` / `TicketFailed` events (see [Events](#events)) to
 > post results to Slack and to alert on failures from these unattended runs.
 
+## Browser review (`ia:review`)
+
+While implementing a ticket, the agent also writes a **test recipe** —
+`.ticket-pilot/recipes/<key>.yaml` — describing how to verify the feature in a browser.
+Once the branch is deployed (e.g. a review app), replay it:
+
+```bash
+php bin/console ia:review LYSI-2098                 # URL from the configured pattern
+php bin/console ia:review LYSI-2098 --url=https://staging.example.com
+```
+
+It drives **headless Chromium** (chrome-php/chrome), runs the steps, takes screenshots,
+and **posts the result back to the ticket** (Jira/GitHub comment). Recipe format:
+
+```yaml
+description: The invoice payment delay can be edited
+steps:
+    - { action: visit, target: "/admin/invoice/123" }
+    - { action: fill, target: "#delay", value: "30" }
+    - { action: click, target: "button[type=submit]" }
+    - { action: wait_for, target: ".alert" }
+    - { action: assert_selector, target: ".alert-success" }
+    - { action: assert_see, value: "Delay updated" }
+    - { action: screenshot, value: "result" }
+```
+
+```yaml
+# config/packages/ticket_pilot.yaml
+ticket_pilot:
+    review:
+        enabled: true
+        url_pattern: 'https://{branch_slug}.review.example.com'   # or pass --url
+        # recipes_dir: '.ticket-pilot/recipes'
+        # chrome_binary: '/usr/bin/chromium'   # empty = auto-detect
+        # screenshot_dir: 'var/ticket-pilot/screenshots'
+```
+
+> Requires `composer require chrome-php/chrome` and a Chromium/Chrome binary in the runtime.
+> The step logic is engine-agnostic (`RecipeRunnerInterface` / `BrowserPageInterface`), so you
+> can plug in another browser engine.
+
 ## Extending
 
 Jira, Sentry and GitHub Issues sources, GitLab and GitHub providers, and the

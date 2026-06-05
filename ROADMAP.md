@@ -4,6 +4,11 @@ Tracking of the analysis-driven improvements. Done items shipped in the version 
 
 ## Shipped
 
+### v0.3.0
+- 🔥 **Browser review** (`ia:review`) — the agent writes a YAML test recipe while
+  implementing the ticket; the command replays it in headless Chromium, screenshots,
+  and reports the step results back to the ticket (Jira/GitHub comment).
+
 ### v0.2.0
 - 🔴 **Shell-injection fix** in `ClaudeAgent` (argv + stdin, no shell).
 - 🔴 **Per-ticket distributed lock** (`symfony/lock`) for concurrent batch/cron runs.
@@ -20,6 +25,9 @@ Tracking of the analysis-driven improvements. Done items shipped in the version 
 ## Planned
 
 ### Fixes / hardening
+- **Attach review screenshots to the ticket** — currently `ia:review` posts the results and
+  the screenshot file names; upload the images as Jira attachments (multipart) / embed them
+  in the GitHub comment.
 - **Adapt the prompt to the ticket type** — give the agent stronger "fix the root cause,
   don't mask the error" guidance for bugs/Sentry issues (use `Ticket::isBug()` / source).
 - **`GitClient` integration tests** — exercise a real local `git` repo (create branch,

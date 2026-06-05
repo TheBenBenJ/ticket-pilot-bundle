@@ -5,6 +5,20 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-06-05
+
+### Added
+- **Browser review** (`ia:review <ticket>`): while implementing a ticket the agent
+  authors a YAML test recipe (`.ticket-pilot/recipes/<key>.yaml`); `ia:review` replays it
+  in **headless Chromium** against a deployed app (URL from `--url` or a `{branch}` pattern),
+  takes screenshots, and **reports the step results back to the ticket** (Jira/GitHub comment).
+  - Contracts: `RecipeRunnerInterface`, `BrowserPageInterface`, `ReviewReporterInterface`.
+  - `Recipe`/`RecipeStep`/`RecipeResult` + engine-agnostic `RecipeExecutor`, `RecipeFactory`,
+    `RecipeRepository`, `ReviewUrlResolver`, and `ReviewSummary`.
+  - `ChromeRecipeRunner` (chrome-php/chrome, optional dependency).
+  - New `review` config section and a recipe-authoring prompt section.
+- `symfony/yaml` promoted to a runtime dependency (recipe parsing).
+
 ## [0.2.0] - 2026-06-02
 
 ### Security
