@@ -8,11 +8,13 @@ use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
 use Symfony\Contracts\HttpClient\Exception\ExceptionInterface as HttpExceptionInterface;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
+use TheBenBenJ\TicketPilotBundle\Contract\AgentReviewReporterInterface;
 use TheBenBenJ\TicketPilotBundle\Contract\ReviewReporterInterface;
 use TheBenBenJ\TicketPilotBundle\Contract\TicketReporterInterface;
 use TheBenBenJ\TicketPilotBundle\Contract\TicketSourceInterface;
 use TheBenBenJ\TicketPilotBundle\Model\MergeRequest;
 use TheBenBenJ\TicketPilotBundle\Model\Ticket;
+use TheBenBenJ\TicketPilotBundle\Review\AgentReviewResult;
 use TheBenBenJ\TicketPilotBundle\Review\RecipeResult;
 use TheBenBenJ\TicketPilotBundle\Review\ReviewSummary;
 
@@ -24,7 +26,7 @@ use TheBenBenJ\TicketPilotBundle\Review\ReviewSummary;
  * key is the issue number; an issue carrying the configured bug label is typed
  * as a bug so the branch planner routes it to the hotfix flow.
  */
-final class GitHubIssueSource implements TicketSourceInterface, TicketReporterInterface, ReviewReporterInterface
+final class GitHubIssueSource implements TicketSourceInterface, TicketReporterInterface, ReviewReporterInterface, AgentReviewReporterInterface
 {
     private const NAME = 'github';
 
@@ -123,6 +125,18 @@ final class GitHubIssueSource implements TicketSourceInterface, TicketReporterIn
     public function reportReview(Ticket $ticket, RecipeResult $result): void
     {
         $this->postComment($ticket->key, ReviewSummary::plain($ticket, $result));
+    }
+
+    public function reportAgentReview(Ticket $ticket, AgentReviewResult $result): void
+    {
+        // The GitHub issues API has no file-upload endpoint, so screenshots are
+        // referenced by name in the comment (they live in the CI artifacts/logs).
+        $header = \sprintf('🤖 **Agent review %s** — `%s`', $result->passed ? '✅ PASSED' : '❌ FAILED', $ticket->key);
+        $screenshots = [] !== $result->screenshots
+            ? "\n\nScreenshots: ".implode(', ', array_map('basename', $result->screenshots))
+            : '';
+
+        $this->postComment($ticket->key, $header."\n\n".$result->summary.$screenshots);
     }
 
     private function postComment(string $key, string $body): void

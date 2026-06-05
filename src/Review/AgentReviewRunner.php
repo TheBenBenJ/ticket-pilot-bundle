@@ -1,0 +1,126 @@
+<?php
+
+declare(strict_types=1);
+
+namespace TheBenBenJ\TicketPilotBundle\Review;
+
+use TheBenBenJ\TicketPilotBundle\Contract\MergeRequestReaderInterface;
+use TheBenBenJ\TicketPilotBundle\Model\Ticket;
+use TheBenBenJ\TicketPilotBundle\Registry\AgentRegistry;
+
+/**
+ * Runs an agent-driven browser review: builds the review prompt (ticket + merge
+ * request context + project rules + credentials), runs the coding agent (which
+ * drives a real browser through its own tools, e.g. a Playwright MCP server),
+ * collects the screenshots it produced, then extracts the verdict and summary.
+ *
+ * The browser itself is the agent's concern (via MCP), so this runner needs no
+ * Chromium binding; it only orchestrates the agent and reads the result.
+ */
+final class AgentReviewRunner
+{
+    public function __construct(
+        private readonly AgentRegistry $agents,
+        private readonly AgentReviewPromptBuilder $promptBuilder,
+        private readonly string $agentName,
+        private readonly string $screenshotDir,
+        private readonly string $login = '',
+        private readonly string $password = '',
+        private readonly string $summaryStartMarker = '<<<REVIEW_SUMMARY',
+        private readonly string $summaryEndMarker = 'REVIEW_SUMMARY>>>',
+        private readonly ?MergeRequestReaderInterface $mergeRequestReader = null,
+    ) {
+    }
+
+    /**
+     * @param callable(string):void|null $onOutput Streamed agent-output callback
+     */
+    public function run(
+        Ticket $ticket,
+        string $baseUrl,
+        string $branch = '',
+        ?string $model = null,
+        ?callable $onOutput = null,
+    ): AgentReviewResult {
+        $mergeRequestDescription = ('' !== $branch && null !== $this->mergeRequestReader)
+            ? $this->mergeRequestReader->mergeRequestDescription($branch)
+            : '';
+
+        $prompt = $this->promptBuilder->build($ticket, $baseUrl, $mergeRequestDescription, $this->login, $this->password);
+
+        $this->ensureScreenshotDir();
+        $startedAt = time();
+
+        $result = $this->agents->get($this->agentName)->run($prompt, $model, $onOutput);
+
+        $screenshots = $this->collectScreenshots($startedAt);
+        $summary = $this->extractSummary($result->output);
+
+        return new AgentReviewResult($this->verdict($summary), $summary, $screenshots, $result->output);
+    }
+
+    private function ensureScreenshotDir(): void
+    {
+        if ('' !== $this->screenshotDir && !is_dir($this->screenshotDir)) {
+            @mkdir($this->screenshotDir, 0o777, true);
+        }
+    }
+
+    /**
+     * Collects the images created in the screenshot directory since the review
+     * started (PNG/JPEG), so only this run's screenshots are reported.
+     *
+     * @return list<string>
+     */
+    private function collectScreenshots(int $since): array
+    {
+        if ('' === $this->screenshotDir) {
+            return [];
+        }
+
+        $matches = glob(rtrim($this->screenshotDir, '/').'/*.{png,jpg,jpeg}', \GLOB_BRACE);
+        if (false === $matches) {
+            return [];
+        }
+
+        $shots = array_values(array_filter(
+            $matches,
+            static fn (string $f): bool => is_file($f) && filemtime($f) >= $since,
+        ));
+        sort($shots);
+
+        return $shots;
+    }
+
+    /**
+     * Extracts the agent's summary block delimited by the markers, falling back
+     * to the tail of the output when the markers are missing.
+     */
+    public function extractSummary(string $output): string
+    {
+        $start = preg_quote($this->summaryStartMarker, '/');
+        $end = preg_quote($this->summaryEndMarker, '/');
+
+        if (1 === preg_match('/'.$start.'(.*?)'.$end.'/s', $output, $matches)) {
+            return trim($matches[1]);
+        }
+
+        return trim(mb_substr($output, -2000));
+    }
+
+    /**
+     * A review passes only when the summary explicitly states it did and never
+     * states it failed (a "failed" token always wins, so an ambiguous or empty
+     * summary is treated as a failure).
+     */
+    public function verdict(string $summary): bool
+    {
+        $normalized = mb_strtoupper($summary);
+
+        if (str_contains($normalized, AgentReviewPromptBuilder::FAIL_TOKEN)) {
+            return false;
+        }
+
+        return str_contains($normalized, AgentReviewPromptBuilder::PASS_TOKEN);
+    }
+}

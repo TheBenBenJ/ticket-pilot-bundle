@@ -5,6 +5,30 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - 2026-06-05
+
+### Added
+- **Agent-driven browser review** — new `review.driver: agent` (alongside `recipe`). Instead of
+  replaying a static YAML recipe, a coding agent (Cursor/Claude/…) drives a **real browser
+  through its own tools** (e.g. a Playwright MCP server), explores the app from the business
+  context, takes screenshots, and returns a verdict (`REVIEW PASSED` / `REVIEW FAILED`) plus a
+  summary.
+  - The prompt aggregates the ticket fields **and the merge/pull request description** (what was
+    developed), a **trusted project rules file** (`review.rules_file`), and the **login
+    credentials** (`review.login` / `review.password`). Ticket/MR text is treated as untrusted
+    and fenced against prompt injection. Project-specific logic lives in the rules file, so the
+    prompt stays generic.
+  - New `AgentReviewRunner`, `AgentReviewPromptBuilder`, `AgentReviewResult`.
+  - New `MergeRequestReaderInterface` (implemented by `GitlabProvider` / `GitHubProvider`) to
+    fetch the MR/PR description for a branch.
+  - New `AgentReviewReporterInterface`: the **Jira** source uploads the screenshots as
+    **attachments** (multipart) and posts the verdict + summary; the **GitHub** source posts the
+    verdict + summary and references the screenshots by name.
+  - `ia:review` gains `--branch`, `--model` and `--no-report`; `review` config gains `driver`,
+    `agent`, `rules_file`, `login`, `password`, `merge_request_context`, and the summary markers.
+- The browser itself stays the agent's concern (MCP), so the `agent` driver needs no
+  `chrome-php/chrome` nor a bundled Chromium binding.
+
 ## [0.4.1] - 2026-06-05
 
 ### Added

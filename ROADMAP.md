@@ -4,6 +4,15 @@ Tracking of the analysis-driven improvements. Done items shipped in the version 
 
 ## Shipped
 
+### v0.5.0
+- 🔥 **Agent-driven browser review** (`review.driver: agent`) — a coding agent drives a real
+  browser via its own tools (e.g. Playwright MCP), fed with the ticket + merge request context
+  and a trusted project rules file, explores the app, screenshots, and returns a verdict.
+- 🟠 **Review screenshots attached to the ticket** — the Jira reporter uploads them as
+  attachments (multipart); GitHub references them by name.
+- 🟠 **Merge request description in the review** — `MergeRequestReaderInterface` on the GitLab /
+  GitHub providers injects "what was developed" into the review prompt.
+
 ### v0.4.0
 - 🔥 **Ticket attachments for the agent** — download Jira attachments, convert office docs
   to PDF (LibreOffice), and list them in the prompt so the agent reads them.
@@ -29,9 +38,8 @@ Tracking of the analysis-driven improvements. Done items shipped in the version 
 ## Planned
 
 ### Fixes / hardening
-- **Attach review screenshots to the ticket** — currently `ia:review` posts the results and
-  the screenshot file names; upload the images as Jira attachments (multipart) / embed them
-  in the GitHub comment.
+- **Embed review screenshots in the GitHub comment** — the Jira reporter now uploads them as
+  attachments; the GitHub reporter still only references them by name (no upload endpoint).
 - **Adapt the prompt to the ticket type** — give the agent stronger "fix the root cause,
   don't mask the error" guidance for bugs/Sentry issues (use `Ticket::isBug()` / source).
 - **`GitClient` integration tests** — exercise a real local `git` repo (create branch,

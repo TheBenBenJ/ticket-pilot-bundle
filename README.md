@@ -272,17 +272,59 @@ agent CLI and the tokens:
 
 ## Browser review (`ia:review`)
 
-While implementing a ticket, the agent also writes a **test recipe** —
-`.ticket-pilot/recipes/<key>.yaml` — describing how to verify the feature in a browser.
-Once the branch is deployed (e.g. a review app), replay it:
+Once a ticket's branch is deployed (e.g. a review app), `ia:review` tests it in a browser
+and **posts the result back to the ticket** (Jira/GitHub comment). Two drivers are available
+(`ticket_pilot.review.driver`):
 
 ```bash
 php bin/console ia:review LYSI-2098                 # URL from the configured pattern
 php bin/console ia:review LYSI-2098 --url=https://staging.example.com
 ```
 
-It drives **headless Chromium** (chrome-php/chrome), runs the steps, takes screenshots,
-and **posts the result back to the ticket** (Jira/GitHub comment). Recipe format:
+### `agent` driver (recommended) — a coding agent drives the browser
+
+The same kind of agent that develops the ticket performs the review: it gets the **business
+context** (ticket fields and the merge/pull request description), your **trusted review rules**
+(a project file: how to log in, navigate, find test data, what counts as an error), the **login
+credentials**, and drives a **real browser through its own tools** (e.g. a [Playwright MCP][mcp]
+server) — exploring the app like a tester, taking screenshots, and returning a verdict
+(`REVIEW PASSED` / `REVIEW FAILED`) plus a summary. Screenshots are uploaded to the ticket
+(Jira attachments).
+
+```yaml
+# config/packages/ticket_pilot.yaml
+ticket_pilot:
+    review:
+        enabled: true
+        driver: agent
+        url_pattern: 'https://{branch_slug}.review.example.com'   # or pass --url
+        rules_file: '.ticket-pilot/review-context.md'             # trusted, project-specific guidance
+        login: '%env(IA_REVIEW_LOGIN)%'
+        password: '%env(IA_REVIEW_PASSWORD)%'
+        # agent: 'cursor'                # empty = default_agent
+        # merge_request_context: true    # inject the MR/PR description as "what was developed"
+        # screenshot_dir: 'var/ticket-pilot/screenshots'
+        # summary_start_marker: '<<<REVIEW_SUMMARY'
+        # summary_end_marker: 'REVIEW_SUMMARY>>>'
+```
+
+```bash
+php bin/console ia:review LYSI-2098 --branch=feature/LYSI-2098 --model=auto
+```
+
+> The browser itself is the agent's concern: configure a browser MCP for your agent (e.g.
+> `.cursor/mcp.json` with `@playwright/mcp`). The bundle stays browser-agnostic and only
+> orchestrates the agent. Everything project-specific lives in your `rules_file`, so the
+> review prompt stays generic. The ticket/MR text is treated as untrusted and fenced against
+> prompt injection.
+
+[mcp]: https://github.com/microsoft/playwright-mcp
+
+### `recipe` driver — replay a YAML recipe in headless Chromium
+
+While implementing a ticket, the agent also writes a **test recipe** —
+`.ticket-pilot/recipes/<key>.yaml`; `ia:review` replays it in **headless Chromium**
+(chrome-php/chrome), runs the steps, takes screenshots, and reports the step results.
 
 ```yaml
 description: The invoice payment delay can be edited
@@ -301,6 +343,7 @@ steps:
 ticket_pilot:
     review:
         enabled: true
+        driver: recipe   # default
         url_pattern: 'https://{branch_slug}.review.example.com'   # or pass --url
         # recipes_dir: '.ticket-pilot/recipes'
         # chrome_binary: '/usr/bin/chromium'   # empty = auto-detect

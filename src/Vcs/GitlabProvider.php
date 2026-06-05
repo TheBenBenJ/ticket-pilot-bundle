@@ -8,6 +8,7 @@ use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
 use Symfony\Contracts\HttpClient\Exception\ExceptionInterface as HttpExceptionInterface;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
+use TheBenBenJ\TicketPilotBundle\Contract\MergeRequestReaderInterface;
 use TheBenBenJ\TicketPilotBundle\Contract\PipelineTriggerInterface;
 use TheBenBenJ\TicketPilotBundle\Contract\VcsProviderInterface;
 use TheBenBenJ\TicketPilotBundle\Model\MergeRequest;
@@ -16,7 +17,7 @@ use TheBenBenJ\TicketPilotBundle\Model\Pipeline;
 /**
  * GitLab implementation of the VCS contracts (REST API v4).
  */
-final class GitlabProvider implements VcsProviderInterface, PipelineTriggerInterface
+final class GitlabProvider implements VcsProviderInterface, PipelineTriggerInterface, MergeRequestReaderInterface
 {
     private readonly HttpClientInterface $client;
     private readonly LoggerInterface $logger;
@@ -64,6 +65,23 @@ final class GitlabProvider implements VcsProviderInterface, PipelineTriggerInter
             $this->logger->error(\sprintf('createMergeRequest %s -> %s failed: %s', $sourceBranch, $targetBranch, $e->getMessage()));
 
             throw new \RuntimeException('Unable to create the merge request', 0, $e);
+        }
+    }
+
+    public function mergeRequestDescription(string $sourceBranch): string
+    {
+        try {
+            $data = $this->client->request(
+                'GET',
+                \sprintf('api/v4/projects/%d/merge_requests', $this->projectId()),
+                ['query' => ['source_branch' => $sourceBranch, 'order_by' => 'updated_at', 'per_page' => 1]],
+            )->toArray();
+
+            return trim((string) ($data[0]['description'] ?? ''));
+        } catch (HttpExceptionInterface $e) {
+            $this->logger->warning(\sprintf('mergeRequestDescription(%s) failed: %s', $sourceBranch, $e->getMessage()));
+
+            return '';
         }
     }
 

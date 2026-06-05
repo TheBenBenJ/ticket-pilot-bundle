@@ -8,6 +8,7 @@ use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
 use Symfony\Contracts\HttpClient\Exception\ExceptionInterface as HttpExceptionInterface;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
+use TheBenBenJ\TicketPilotBundle\Contract\AgentReviewReporterInterface;
 use TheBenBenJ\TicketPilotBundle\Contract\AttachmentDownloaderInterface;
 use TheBenBenJ\TicketPilotBundle\Contract\ReviewReporterInterface;
 use TheBenBenJ\TicketPilotBundle\Contract\TicketReporterInterface;
@@ -15,6 +16,7 @@ use TheBenBenJ\TicketPilotBundle\Contract\TicketSourceInterface;
 use TheBenBenJ\TicketPilotBundle\Model\Attachment;
 use TheBenBenJ\TicketPilotBundle\Model\MergeRequest;
 use TheBenBenJ\TicketPilotBundle\Model\Ticket;
+use TheBenBenJ\TicketPilotBundle\Review\AgentReviewResult;
 use TheBenBenJ\TicketPilotBundle\Review\RecipeResult;
 use TheBenBenJ\TicketPilotBundle\Review\ReviewSummary;
 
@@ -24,7 +26,7 @@ use TheBenBenJ\TicketPilotBundle\Review\ReviewSummary;
  * Pending tickets are selected by JQL: a configurable label at a configurable
  * status, ordered by priority then creation date.
  */
-final class JiraTicketSource implements TicketSourceInterface, TicketReporterInterface, ReviewReporterInterface, AttachmentDownloaderInterface
+final class JiraTicketSource implements TicketSourceInterface, TicketReporterInterface, ReviewReporterInterface, AgentReviewReporterInterface, AttachmentDownloaderInterface
 {
     private const NAME = 'jira';
 
@@ -113,6 +115,48 @@ final class JiraTicketSource implements TicketSourceInterface, TicketReporterInt
     public function reportReview(Ticket $ticket, RecipeResult $result): void
     {
         $this->postComment($ticket->key, ReviewSummary::plain($ticket, $result));
+    }
+
+    public function reportAgentReview(Ticket $ticket, AgentReviewResult $result): void
+    {
+        // Upload the screenshots first so the comment can reference them as attachments.
+        foreach ($result->screenshots as $screenshot) {
+            $this->uploadAttachment($ticket->key, $screenshot);
+        }
+
+        $header = \sprintf('🤖 Agent review %s — %s', $result->passed ? '✅ PASSED' : '❌ FAILED', $ticket->key);
+        $this->postComment($ticket->key, $header."\n\n".$result->summary);
+    }
+
+    /**
+     * Uploads a file as a Jira issue attachment (multipart/form-data built by hand
+     * so no extra dependency is required); the X-Atlassian-Token header is mandatory.
+     */
+    private function uploadAttachment(string $key, string $path): void
+    {
+        if ('' === $path || !is_file($path)) {
+            return;
+        }
+
+        $name = basename($path);
+        $boundary = '----TicketPilot'.bin2hex(random_bytes(8));
+        $body = "--{$boundary}\r\n"
+            ."Content-Disposition: form-data; name=\"file\"; filename=\"{$name}\"\r\n"
+            ."Content-Type: application/octet-stream\r\n\r\n"
+            .(string) file_get_contents($path)."\r\n"
+            ."--{$boundary}--\r\n";
+
+        try {
+            $this->client->request('POST', \sprintf('rest/api/3/issue/%s/attachments', $key), [
+                'headers' => [
+                    'X-Atlassian-Token' => 'no-check',
+                    'Content-Type' => 'multipart/form-data; boundary='.$boundary,
+                ],
+                'body' => $body,
+            ])->getStatusCode();
+        } catch (HttpExceptionInterface $e) {
+            $this->logger->warning(\sprintf('JiraTicketSource::uploadAttachment(%s) failed for "%s": %s', $key, $name, $e->getMessage()));
+        }
     }
 
     public function downloadAttachments(Ticket $ticket, string $targetDir): array

@@ -8,6 +8,7 @@ use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
 use Symfony\Contracts\HttpClient\Exception\ExceptionInterface as HttpExceptionInterface;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
+use TheBenBenJ\TicketPilotBundle\Contract\MergeRequestReaderInterface;
 use TheBenBenJ\TicketPilotBundle\Contract\PipelineTriggerInterface;
 use TheBenBenJ\TicketPilotBundle\Contract\VcsProviderInterface;
 use TheBenBenJ\TicketPilotBundle\Model\MergeRequest;
@@ -20,7 +21,7 @@ use TheBenBenJ\TicketPilotBundle\Model\Pipeline;
  * `repository_dispatch` event carrying the auto-dev variables as client payload,
  * which a GitHub Actions workflow can react to.
  */
-final class GitHubProvider implements VcsProviderInterface, PipelineTriggerInterface
+final class GitHubProvider implements VcsProviderInterface, PipelineTriggerInterface, MergeRequestReaderInterface
 {
     private readonly HttpClientInterface $client;
     private readonly LoggerInterface $logger;
@@ -77,6 +78,23 @@ final class GitHubProvider implements VcsProviderInterface, PipelineTriggerInter
             $this->logger->error(\sprintf('createMergeRequest %s -> %s failed: %s', $sourceBranch, $targetBranch, $e->getMessage()));
 
             throw new \RuntimeException('Unable to create the pull request', 0, $e);
+        }
+    }
+
+    public function mergeRequestDescription(string $sourceBranch): string
+    {
+        try {
+            $data = $this->client->request(
+                'GET',
+                \sprintf('repos/%s/%s/pulls', $this->owner, $this->repo),
+                ['query' => ['head' => \sprintf('%s:%s', $this->owner, $sourceBranch), 'state' => 'all', 'per_page' => 1]],
+            )->toArray();
+
+            return trim((string) ($data[0]['body'] ?? ''));
+        } catch (HttpExceptionInterface $e) {
+            $this->logger->warning(\sprintf('mergeRequestDescription(%s) failed: %s', $sourceBranch, $e->getMessage()));
+
+            return '';
         }
     }
 

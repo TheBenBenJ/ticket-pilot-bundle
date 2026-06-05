@@ -22,6 +22,7 @@ use TheBenBenJ\TicketPilotBundle\Command\CreateMergeRequestCommand;
 use TheBenBenJ\TicketPilotBundle\Command\ListTicketsCommand;
 use TheBenBenJ\TicketPilotBundle\Command\ReviewCommand;
 use TheBenBenJ\TicketPilotBundle\Command\ShowPromptCommand;
+use TheBenBenJ\TicketPilotBundle\Contract\MergeRequestReaderInterface;
 use TheBenBenJ\TicketPilotBundle\Contract\PipelineTriggerInterface;
 use TheBenBenJ\TicketPilotBundle\Contract\PromptBuilderInterface;
 use TheBenBenJ\TicketPilotBundle\Contract\QualityGateInterface;
@@ -34,6 +35,8 @@ use TheBenBenJ\TicketPilotBundle\Prompt\DefaultPromptBuilder;
 use TheBenBenJ\TicketPilotBundle\Quality\CommandQualityGate;
 use TheBenBenJ\TicketPilotBundle\Registry\AgentRegistry;
 use TheBenBenJ\TicketPilotBundle\Registry\TicketSourceRegistry;
+use TheBenBenJ\TicketPilotBundle\Review\AgentReviewPromptBuilder;
+use TheBenBenJ\TicketPilotBundle\Review\AgentReviewRunner;
 use TheBenBenJ\TicketPilotBundle\Review\ChromeRecipeRunner;
 use TheBenBenJ\TicketPilotBundle\Review\RecipeExecutor;
 use TheBenBenJ\TicketPilotBundle\Review\RecipeFactory;
@@ -115,6 +118,15 @@ final class TicketPilotExtension extends Extension
 
         $review = $config['review'];
         $base = rtrim($projectDir, '/');
+        $screenshotDir = $base.'/'.ltrim($review['screenshot_dir'], '/');
+
+        $container->setDefinition(ReviewUrlResolver::class, new Definition(ReviewUrlResolver::class, [$review['url_pattern']]));
+
+        if ('agent' === $review['driver']) {
+            $this->registerAgentReview($container, $review, $base, $screenshotDir, $config['prompt']['language']);
+
+            return;
+        }
 
         $container->setDefinition(RecipeFactory::class, new Definition(RecipeFactory::class));
         $container->setDefinition(RecipeRepository::class, new Definition(RecipeRepository::class, [
@@ -122,7 +134,7 @@ final class TicketPilotExtension extends Extension
             new Reference(RecipeFactory::class),
         ]));
         $container->setDefinition(RecipeExecutor::class, new Definition(RecipeExecutor::class, [
-            $base.'/'.ltrim($review['screenshot_dir'], '/'),
+            $screenshotDir,
             $review['wait_timeout'],
         ]));
         $browserOptions = ['headless' => true];
@@ -135,15 +147,63 @@ final class TicketPilotExtension extends Extension
             $browserOptions,
         ]));
         $container->setAlias(RecipeRunnerInterface::class, ChromeRecipeRunner::class);
-        $container->setDefinition(ReviewUrlResolver::class, new Definition(ReviewUrlResolver::class, [$review['url_pattern']]));
 
         $this->registerCommand($container, ReviewCommand::class, [
             new Reference(TicketSourceRegistry::class),
             new Reference(BranchPlanner::class),
-            new Reference(RecipeRepository::class),
             new Reference(ReviewUrlResolver::class),
-            new Reference(RecipeRunnerInterface::class),
+            'recipe',
             '%ticket_pilot.default_source%',
+            new Reference(RecipeRepository::class),
+            new Reference(RecipeRunnerInterface::class),
+            null,
+        ]);
+    }
+
+    /**
+     * Wires the agent-driven review: a coding agent drives a real browser (via its
+     * own tools/MCP) from the ticket and merge request context, then reports a verdict.
+     *
+     * @param array<string, mixed> $review
+     */
+    private function registerAgentReview(ContainerBuilder $container, array $review, string $base, string $screenshotDir, string $language): void
+    {
+        $rulesFile = '' !== $review['rules_file'] ? $base.'/'.ltrim($review['rules_file'], '/') : '';
+
+        $container->setDefinition(AgentReviewPromptBuilder::class, new Definition(AgentReviewPromptBuilder::class, [
+            $language,
+            $rulesFile,
+            $screenshotDir,
+            $review['summary_start_marker'],
+            $review['summary_end_marker'],
+        ]));
+
+        $agentName = '' !== $review['agent'] ? $review['agent'] : '%ticket_pilot.default_agent%';
+        $mergeRequestReader = $review['merge_request_context']
+            ? new Reference(MergeRequestReaderInterface::class, ContainerBuilder::NULL_ON_INVALID_REFERENCE)
+            : null;
+
+        $container->setDefinition(AgentReviewRunner::class, new Definition(AgentReviewRunner::class, [
+            new Reference(AgentRegistry::class),
+            new Reference(AgentReviewPromptBuilder::class),
+            $agentName,
+            $screenshotDir,
+            $review['login'],
+            $review['password'],
+            $review['summary_start_marker'],
+            $review['summary_end_marker'],
+            $mergeRequestReader,
+        ]));
+
+        $this->registerCommand($container, ReviewCommand::class, [
+            new Reference(TicketSourceRegistry::class),
+            new Reference(BranchPlanner::class),
+            new Reference(ReviewUrlResolver::class),
+            'agent',
+            '%ticket_pilot.default_source%',
+            null,
+            null,
+            new Reference(AgentReviewRunner::class),
         ]);
     }
 
@@ -194,7 +254,7 @@ final class TicketPilotExtension extends Extension
         ]));
 
         $prompt = $config['prompt'];
-        $reviewRecipePath = ($config['review']['enabled'] && $config['review']['write_recipe'])
+        $reviewRecipePath = ($config['review']['enabled'] && 'recipe' === $config['review']['driver'] && $config['review']['write_recipe'])
             ? rtrim($config['review']['recipes_dir'], '/').'/{key}.yaml'
             : '';
 
@@ -340,6 +400,8 @@ final class TicketPilotExtension extends Extension
 
         $container->setAlias(VcsProviderInterface::class, $providerClass)->setPublic(true);
         $container->setAlias(PipelineTriggerInterface::class, $providerClass);
+        // Both providers can read a merge/pull request description (agent review context).
+        $container->setAlias(MergeRequestReaderInterface::class, $providerClass);
         $container->setParameter('ticket_pilot.pipeline_ref', $pipelineRef);
 
         $this->registerPipelineController($container, $pipelineRef);
