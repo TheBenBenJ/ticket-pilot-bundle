@@ -43,8 +43,25 @@ final class Configuration implements ConfigurationInterface
         $this->addSecuritySection($root);
         $this->addHttpSection($root);
         $this->addReviewSection($root);
+        $this->addAttachmentsSection($root);
 
         return $treeBuilder;
+    }
+
+    private function addAttachmentsSection(\Symfony\Component\Config\Definition\Builder\ArrayNodeDefinition $root): void
+    {
+        $root->children()->arrayNode('attachments')->canBeEnabled()->children()
+            ->scalarNode('dir')->defaultValue('var/ticket-pilot/attachments')
+                ->info('Base dir (relative to the project) where ticket attachments are downloaded, per ticket.')
+            ->end()
+            ->booleanNode('convert_documents')->defaultTrue()
+                ->info('Convert office documents (doc/docx/odt/rtf) to PDF so the agent can read them.')
+            ->end()
+            ->scalarNode('soffice_binary')->defaultValue('soffice')
+                ->info('LibreOffice binary used for the conversion.')
+            ->end()
+            ->integerNode('timeout')->defaultValue(120)->min(1)->end()
+        ->end()->end();
     }
 
     private function addReviewSection(\Symfony\Component\Config\Definition\Builder\ArrayNodeDefinition $root): void

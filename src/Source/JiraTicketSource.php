@@ -8,9 +8,11 @@ use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
 use Symfony\Contracts\HttpClient\Exception\ExceptionInterface as HttpExceptionInterface;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
+use TheBenBenJ\TicketPilotBundle\Contract\AttachmentDownloaderInterface;
 use TheBenBenJ\TicketPilotBundle\Contract\ReviewReporterInterface;
 use TheBenBenJ\TicketPilotBundle\Contract\TicketReporterInterface;
 use TheBenBenJ\TicketPilotBundle\Contract\TicketSourceInterface;
+use TheBenBenJ\TicketPilotBundle\Model\Attachment;
 use TheBenBenJ\TicketPilotBundle\Model\MergeRequest;
 use TheBenBenJ\TicketPilotBundle\Model\Ticket;
 use TheBenBenJ\TicketPilotBundle\Review\RecipeResult;
@@ -22,7 +24,7 @@ use TheBenBenJ\TicketPilotBundle\Review\ReviewSummary;
  * Pending tickets are selected by JQL: a configurable label at a configurable
  * status, ordered by priority then creation date.
  */
-final class JiraTicketSource implements TicketSourceInterface, TicketReporterInterface, ReviewReporterInterface
+final class JiraTicketSource implements TicketSourceInterface, TicketReporterInterface, ReviewReporterInterface, AttachmentDownloaderInterface
 {
     private const NAME = 'jira';
 
@@ -91,7 +93,7 @@ final class JiraTicketSource implements TicketSourceInterface, TicketReporterInt
             $data = $this->client->request('GET', \sprintf('rest/api/3/issue/%s', $key), [
                 'query' => [
                     'expand' => 'renderedFields,names',
-                    'fields' => 'summary,description,issuetype,priority,labels,fixVersions,components,subtasks,issuelinks,comment,assignee,reporter,customfield_10020,status',
+                    'fields' => 'summary,description,issuetype,priority,labels,fixVersions,components,subtasks,issuelinks,comment,assignee,reporter,customfield_10020,status,attachment',
                 ],
             ])->toArray();
 
@@ -111,6 +113,33 @@ final class JiraTicketSource implements TicketSourceInterface, TicketReporterInt
     public function reportReview(Ticket $ticket, RecipeResult $result): void
     {
         $this->postComment($ticket->key, ReviewSummary::plain($ticket, $result));
+    }
+
+    public function downloadAttachments(Ticket $ticket, string $targetDir): array
+    {
+        if ([] === $ticket->attachments) {
+            return [];
+        }
+
+        if (!is_dir($targetDir) && !mkdir($targetDir, 0o777, true) && !is_dir($targetDir)) {
+            throw new \RuntimeException(\sprintf('Cannot create attachments directory "%s"', $targetDir));
+        }
+
+        $paths = [];
+        foreach ($ticket->attachments as $attachment) {
+            $name = preg_replace('/[^A-Za-z0-9._-]+/', '_', basename($attachment->filename)) ?: 'attachment';
+            $dest = rtrim($targetDir, '/').'/'.$name;
+
+            try {
+                $content = $this->client->request('GET', $attachment->url)->getContent();
+                file_put_contents($dest, $content);
+                $paths[] = $dest;
+            } catch (HttpExceptionInterface $e) {
+                $this->logger->warning(\sprintf('JiraTicketSource::downloadAttachments(%s) failed for "%s": %s', $ticket->key, $name, $e->getMessage()));
+            }
+        }
+
+        return $paths;
     }
 
     /**
@@ -161,6 +190,18 @@ final class JiraTicketSource implements TicketSourceInterface, TicketReporterInt
             $linked[] = $link['outwardIssue']['key'] ?? $link['inwardIssue']['key'] ?? null;
         }
 
+        $attachments = [];
+        foreach ($fields['attachment'] ?? [] as $file) {
+            if (!empty($file['content'])) {
+                $attachments[] = new Attachment(
+                    $file['filename'] ?? 'attachment',
+                    (string) $file['content'],
+                    $file['mimeType'] ?? '',
+                    (int) ($file['size'] ?? 0),
+                );
+            }
+        }
+
         return new Ticket(
             key: $data['key'],
             title: $fields['summary'] ?? '',
@@ -188,6 +229,7 @@ final class JiraTicketSource implements TicketSourceInterface, TicketReporterInt
             assignee: $fields['assignee']['displayName'] ?? null,
             reporter: $fields['reporter']['displayName'] ?? null,
             url: \sprintf('%sbrowse/%s', $this->baseUri, $data['key']),
+            attachments: $attachments,
         );
     }
 

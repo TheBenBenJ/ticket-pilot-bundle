@@ -13,23 +13,24 @@ namespace TheBenBenJ\TicketPilotBundle\Model;
 final readonly class Ticket
 {
     /**
-     * @param string       $key                Unique key (e.g. PROJ-1234, SENTRY-56789)
-     * @param string       $title              Short summary
-     * @param string       $description        Full description (plain text / markdown)
-     * @param string       $type               Free-form type label as exposed by the source (Story, Bug, Task, ...)
-     * @param string       $source             Source name that produced this ticket (e.g. "jira", "sentry")
-     * @param list<string> $fixVersions        Target fix versions, most relevant first
-     * @param string       $acceptanceCriteria Acceptance criteria, when extractable
-     * @param list<string> $comments           Human-readable comments
-     * @param list<string> $subTasks           Keys of linked sub-tasks
-     * @param string       $priority           Priority label as exposed by the source
-     * @param list<string> $components         Affected components
-     * @param list<string> $labels             Labels / tags
-     * @param list<string> $linkedTickets      Keys of linked tickets
-     * @param string|null  $sprint             Active sprint name, if any
-     * @param string|null  $assignee           Assignee display name
-     * @param string|null  $reporter           Reporter display name
-     * @param string|null  $url                Direct link to the source ticket
+     * @param string           $key                Unique key (e.g. PROJ-1234, SENTRY-56789)
+     * @param string           $title              Short summary
+     * @param string           $description        Full description (plain text / markdown)
+     * @param string           $type               Free-form type label as exposed by the source (Story, Bug, Task, ...)
+     * @param string           $source             Source name that produced this ticket (e.g. "jira", "sentry")
+     * @param list<string>     $fixVersions        Target fix versions, most relevant first
+     * @param string           $acceptanceCriteria Acceptance criteria, when extractable
+     * @param list<string>     $comments           Human-readable comments
+     * @param list<string>     $subTasks           Keys of linked sub-tasks
+     * @param string           $priority           Priority label as exposed by the source
+     * @param list<string>     $components         Affected components
+     * @param list<string>     $labels             Labels / tags
+     * @param list<string>     $linkedTickets      Keys of linked tickets
+     * @param string|null      $sprint             Active sprint name, if any
+     * @param string|null      $assignee           Assignee display name
+     * @param string|null      $reporter           Reporter display name
+     * @param string|null      $url                Direct link to the source ticket
+     * @param list<Attachment> $attachments        Files attached to the ticket
      */
     public function __construct(
         public string $key,
@@ -49,6 +50,7 @@ final readonly class Ticket
         public ?string $assignee = null,
         public ?string $reporter = null,
         public ?string $url = null,
+        public array $attachments = [],
     ) {
     }
 
@@ -95,6 +97,7 @@ final readonly class Ticket
             'assignee' => $this->assignee,
             'reporter' => $this->reporter,
             'url' => $this->url,
+            'attachments' => array_map(static fn (Attachment $a): string => $a->filename, $this->attachments),
         ];
     }
 }

@@ -23,6 +23,8 @@ final readonly class AutoDevOptions
      *                                       remotely if it was pushed) when the run fails
      * @param int          $lockTtl          TTL (seconds) of the per-ticket lock, when a lock factory
      *                                       is wired; should cover the longest expected run
+     * @param string       $attachmentsDir   Base dir where ticket attachments are downloaded
+     *                                       (per-ticket subfolder); empty disables attachments
      */
     public function __construct(
         public array $excludePaths = [],
@@ -30,6 +32,7 @@ final readonly class AutoDevOptions
         public string $onQualityFailure = self::ON_QUALITY_FAILURE_ABORT,
         public bool $cleanupOnFailure = true,
         public int $lockTtl = 3600,
+        public string $attachmentsDir = '',
     ) {
     }
 

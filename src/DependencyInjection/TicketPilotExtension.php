@@ -15,6 +15,8 @@ use Symfony\Component\HttpClient\RetryableHttpClient;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
 use TheBenBenJ\TicketPilotBundle\Agent\ClaudeAgent;
 use TheBenBenJ\TicketPilotBundle\Agent\CursorAgent;
+use TheBenBenJ\TicketPilotBundle\Attachment\AttachmentCollector;
+use TheBenBenJ\TicketPilotBundle\Attachment\DocumentConverter;
 use TheBenBenJ\TicketPilotBundle\Command\AutoDevCommand;
 use TheBenBenJ\TicketPilotBundle\Command\CreateMergeRequestCommand;
 use TheBenBenJ\TicketPilotBundle\Command\ListTicketsCommand;
@@ -68,6 +70,38 @@ final class TicketPilotExtension extends Extension
         $this->registerQuality($container, $config, $projectDir, $logger);
         $this->registerOrchestration($container, $config, $projectDir, $hasVcs);
         $this->registerReview($container, $config, $projectDir);
+        $this->registerAttachments($container, $config);
+    }
+
+    /**
+     * @param array<string, mixed> $config
+     */
+    private function attachmentsDir(array $config, string $projectDir): string
+    {
+        return $config['attachments']['enabled']
+            ? rtrim($projectDir, '/').'/'.ltrim($config['attachments']['dir'], '/')
+            : '';
+    }
+
+    /**
+     * @param array<string, mixed> $config
+     */
+    private function registerAttachments(ContainerBuilder $container, array $config): void
+    {
+        if (!$config['attachments']['enabled']) {
+            return;
+        }
+
+        $a = $config['attachments'];
+        $container->setDefinition(DocumentConverter::class, new Definition(DocumentConverter::class, [
+            $a['soffice_binary'],
+            $a['timeout'],
+            new Reference(LoggerInterface::class, ContainerBuilder::NULL_ON_INVALID_REFERENCE),
+        ]));
+        $container->setDefinition(AttachmentCollector::class, new Definition(AttachmentCollector::class, [
+            new Reference(DocumentConverter::class),
+            $a['convert_documents'],
+        ]));
     }
 
     /**
@@ -169,6 +203,7 @@ final class TicketPilotExtension extends Extension
             $projectDir,
             $prompt['convention_files'],
             $reviewRecipePath,
+            $this->attachmentsDir($config, $projectDir),
         ]));
         $container->setAlias(PromptBuilderInterface::class, DefaultPromptBuilder::class)->setPublic(true);
 
@@ -354,6 +389,7 @@ final class TicketPilotExtension extends Extension
             $config['quality']['on_failure'],
             $config['cleanup_branch_on_failure'],
             $config['agent_timeout'],
+            $this->attachmentsDir($config, $projectDir),
         ]);
 
         $container->setDefinition(AutoDevRunner::class, new Definition(AutoDevRunner::class, [
@@ -367,6 +403,7 @@ final class TicketPilotExtension extends Extension
             $config['quality']['enabled'] ? new Reference(QualityGateInterface::class) : null,
             new Reference('event_dispatcher', ContainerBuilder::NULL_ON_INVALID_REFERENCE),
             new Reference('lock.factory', ContainerBuilder::NULL_ON_INVALID_REFERENCE),
+            $config['attachments']['enabled'] ? new Reference(AttachmentCollector::class) : null,
         ]));
 
         $this->registerCommand($container, AutoDevCommand::class, [

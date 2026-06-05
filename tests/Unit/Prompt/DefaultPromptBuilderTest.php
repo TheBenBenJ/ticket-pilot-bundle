@@ -107,6 +107,24 @@ final class DefaultPromptBuilderTest extends TestCase
         self::assertStringNotContainsString('Browser test recipe', (new DefaultPromptBuilder())->build($this->ticket()));
     }
 
+    public function testAttachmentsAreListedWhenPresent(): void
+    {
+        $dir = sys_get_temp_dir().'/tpb_att_'.uniqid();
+        mkdir($dir.'/PROJ-42', 0o777, true);
+        file_put_contents($dir.'/PROJ-42/spec.pdf', 'x');
+
+        try {
+            $prompt = (new DefaultPromptBuilder(attachmentsDir: $dir))->build($this->ticket());
+
+            self::assertStringContainsString('## Ticket attachments', $prompt);
+            self::assertStringContainsString('PROJ-42/spec.pdf', $prompt);
+        } finally {
+            @unlink($dir.'/PROJ-42/spec.pdf');
+            @rmdir($dir.'/PROJ-42');
+            @rmdir($dir);
+        }
+    }
+
     private function ticket(): Ticket
     {
         return new Ticket(

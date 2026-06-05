@@ -6,6 +6,8 @@ namespace TheBenBenJ\TicketPilotBundle\Service;
 
 use Symfony\Component\Lock\LockFactory;
 use Symfony\Contracts\EventDispatcher\EventDispatcherInterface;
+use TheBenBenJ\TicketPilotBundle\Attachment\AttachmentCollector;
+use TheBenBenJ\TicketPilotBundle\Contract\AttachmentDownloaderInterface;
 use TheBenBenJ\TicketPilotBundle\Contract\PromptBuilderInterface;
 use TheBenBenJ\TicketPilotBundle\Contract\QualityGateInterface;
 use TheBenBenJ\TicketPilotBundle\Contract\QualityReport;
@@ -48,6 +50,7 @@ final class AutoDevRunner
         private readonly ?QualityGateInterface $qualityGate = null,
         private readonly ?EventDispatcherInterface $dispatcher = null,
         private readonly ?LockFactory $lockFactory = null,
+        private readonly ?AttachmentCollector $attachmentCollector = null,
     ) {
     }
 
@@ -86,6 +89,14 @@ final class AutoDevRunner
             $pushed = false;
 
             try {
+                if (null !== $this->attachmentCollector && '' !== $this->options->attachmentsDir && $source instanceof AttachmentDownloaderInterface) {
+                    // Best-effort: make the ticket's attachments available for the agent to read.
+                    try {
+                        $this->attachmentCollector->collect($source, $ticket, $this->options->attachmentsDir.'/'.$ticket->key);
+                    } catch (\Throwable) {
+                    }
+                }
+
                 $prompt = $this->promptBuilder->build($ticket);
                 $result = $agent->run($prompt, $model, $onOutput);
 
