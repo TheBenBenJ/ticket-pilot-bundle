@@ -22,6 +22,7 @@ use TheBenBenJ\TicketPilotBundle\Command\CreateMergeRequestCommand;
 use TheBenBenJ\TicketPilotBundle\Command\IterateCommand;
 use TheBenBenJ\TicketPilotBundle\Command\ListTicketsCommand;
 use TheBenBenJ\TicketPilotBundle\Command\ReviewCommand;
+use TheBenBenJ\TicketPilotBundle\Command\RunsCommand;
 use TheBenBenJ\TicketPilotBundle\Command\ShowPromptCommand;
 use TheBenBenJ\TicketPilotBundle\Contract\MergeRequestReaderInterface;
 use TheBenBenJ\TicketPilotBundle\Contract\PipelineTriggerInterface;
@@ -29,6 +30,9 @@ use TheBenBenJ\TicketPilotBundle\Contract\PromptBuilderInterface;
 use TheBenBenJ\TicketPilotBundle\Contract\QualityGateInterface;
 use TheBenBenJ\TicketPilotBundle\Contract\RecipeRunnerInterface;
 use TheBenBenJ\TicketPilotBundle\Contract\VcsProviderInterface;
+use TheBenBenJ\TicketPilotBundle\Controller\DashboardController;
+use TheBenBenJ\TicketPilotBundle\Controller\DashboardLaunchController;
+use TheBenBenJ\TicketPilotBundle\Controller\DashboardRenderer;
 use TheBenBenJ\TicketPilotBundle\Controller\TriggerPipelineController;
 use TheBenBenJ\TicketPilotBundle\Git\GitClient;
 use TheBenBenJ\TicketPilotBundle\Git\GitInterface;
@@ -45,6 +49,8 @@ use TheBenBenJ\TicketPilotBundle\Review\RecipeFactory;
 use TheBenBenJ\TicketPilotBundle\Review\RecipeRepository;
 use TheBenBenJ\TicketPilotBundle\Review\ReviewReportRenderer;
 use TheBenBenJ\TicketPilotBundle\Review\ReviewUrlResolver;
+use TheBenBenJ\TicketPilotBundle\Run\JsonlRunStore;
+use TheBenBenJ\TicketPilotBundle\Run\RunStoreInterface;
 use TheBenBenJ\TicketPilotBundle\Security\TicketGuard;
 use TheBenBenJ\TicketPilotBundle\Service\AutoDevOptions;
 use TheBenBenJ\TicketPilotBundle\Service\AutoDevRunner;
@@ -78,6 +84,58 @@ final class TicketPilotExtension extends Extension
         $this->registerOrchestration($container, $config, $projectDir, $hasVcs);
         $this->registerReview($container, $config, $projectDir);
         $this->registerAttachments($container, $config);
+        $this->registerTracking($container, $config, $projectDir, $hasVcs);
+    }
+
+    /**
+     * @param array<string, mixed> $config
+     */
+    private function registerTracking(ContainerBuilder $container, array $config, string $projectDir, bool $hasVcs): void
+    {
+        if (!$config['tracking']['enabled']) {
+            return;
+        }
+
+        $path = (string) $config['tracking']['path'];
+        $isAbsolute = '' !== $path && ('/' === $path[0] || 1 === preg_match('#^[A-Za-z]:[\\\\/]#', $path));
+        $resolved = $isAbsolute ? $path : rtrim($projectDir, '/').'/'.ltrim($path, '/');
+
+        $container->setDefinition(JsonlRunStore::class, new Definition(JsonlRunStore::class, [$resolved]));
+        $container->setAlias(RunStoreInterface::class, JsonlRunStore::class)->setPublic(true);
+
+        $this->registerCommand($container, RunsCommand::class, [new Reference(RunStoreInterface::class)]);
+
+        if (!$config['tracking']['dashboard']) {
+            return;
+        }
+
+        $container->setDefinition(DashboardRenderer::class, new Definition(DashboardRenderer::class));
+
+        $dashboard = new Definition(DashboardController::class, [
+            new Reference(RunStoreInterface::class),
+            new Reference(DashboardRenderer::class),
+            new Reference('router'),
+            new Reference(TicketSourceRegistry::class),
+            new Reference(AgentRegistry::class),
+            '%ticket_pilot.default_source%',
+            '%ticket_pilot.default_agent%',
+            $hasVcs,
+        ]);
+        $dashboard->addTag('controller.service_arguments');
+        $dashboard->setPublic(true);
+        $container->setDefinition(DashboardController::class, $dashboard);
+
+        $launch = new Definition(DashboardLaunchController::class, [
+            new Reference(DashboardRenderer::class),
+            new Reference('router'),
+            $hasVcs ? '%ticket_pilot.pipeline_ref%' : '',
+            '%ticket_pilot.default_source%',
+            '%ticket_pilot.default_agent%',
+            new Reference(PipelineTriggerInterface::class, ContainerBuilder::NULL_ON_INVALID_REFERENCE),
+        ]);
+        $launch->addTag('controller.service_arguments');
+        $launch->setPublic(true);
+        $container->setDefinition(DashboardLaunchController::class, $launch);
     }
 
     /**
@@ -161,6 +219,7 @@ final class TicketPilotExtension extends Extension
             new Reference(RecipeRepository::class),
             new Reference(RecipeRunnerInterface::class),
             null,
+            new Reference(RunStoreInterface::class, ContainerBuilder::NULL_ON_INVALID_REFERENCE),
         ]);
     }
 
@@ -220,6 +279,7 @@ final class TicketPilotExtension extends Extension
             null,
             null,
             new Reference(AgentReviewRunner::class),
+            new Reference(RunStoreInterface::class, ContainerBuilder::NULL_ON_INVALID_REFERENCE),
         ]);
     }
 
@@ -496,6 +556,7 @@ final class TicketPilotExtension extends Extension
             new Reference(TicketGuard::class),
             '%ticket_pilot.default_source%',
             '%ticket_pilot.default_agent%',
+            new Reference(RunStoreInterface::class, ContainerBuilder::NULL_ON_INVALID_REFERENCE),
         ]);
         $this->registerCommand($container, CreateMergeRequestCommand::class, [
             new Reference(TicketSourceRegistry::class),
@@ -532,6 +593,7 @@ final class TicketPilotExtension extends Extension
             new Reference(IterateRunner::class),
             '%ticket_pilot.default_source%',
             '%ticket_pilot.default_agent%',
+            new Reference(RunStoreInterface::class, ContainerBuilder::NULL_ON_INVALID_REFERENCE),
         ]);
     }
 

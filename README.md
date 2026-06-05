@@ -170,6 +170,16 @@ php bin/console ia:prompt --ticket=PROJ-1234
 php bin/console ia:auto-dev --ticket=PROJ-1234 --agent=claude
 php bin/console ia:auto-dev --source=sentry --limit=3      # batch from a source
 php bin/console ia:auto-dev --dry-run                       # preview only
+
+# Iterate: address review feedback on the ticket's existing branch and push
+php bin/console ia:iterate PROJ-1234                        # ticket comments + MR discussion
+php bin/console ia:iterate PROJ-1234 --branch=feature/PROJ-1234 --agent=claude
+
+# Review a deployed app (recipe or agent driver); pick the agent per run
+php bin/console ia:review PROJ-1234 --url=https://pr-1234.example.com --agent=claude
+
+# List what the bundle has done (needs tracking enabled)
+php bin/console ia:runs --type=review --limit=20
 ```
 
 ### HTTP trigger (optional)
@@ -209,6 +219,29 @@ jobs:
               --source="${{ github.event.client_payload.IA_SOURCE }}"
               --agent="${{ github.event.client_payload.IA_AGENT }}"
 ```
+
+### Run tracking & dashboard (optional)
+
+Enable `tracking` to record every run (auto-dev, iterate, review) to an append-only
+JSONL file, then list them with `ia:runs` or browse the bundled HTML dashboard.
+
+```yaml
+ticket_pilot:
+    tracking:
+        enabled: true
+        # Relative paths resolve from the project dir. Point it at a persistent/shared
+        # location (volume) when your runs happen in throw-away CI containers.
+        path: 'var/ticket-pilot/runs.jsonl'
+        dashboard: true   # register the /ia/dashboard controller (route still imported below)
+```
+
+The dashboard lives at `GET /ia/dashboard` (same opt-in route import as the trigger). It
+lists the recent runs and, when a VCS provider exposing pipelines is enabled, offers forms
+to **launch** auto-dev / iterate / review — each triggers a CI pipeline carrying the `IA_*`
+variables (including `IA_MODE=auto-dev|iterate|review`) so your CI routes to the right job.
+
+> Protect `/ia/dashboard` behind your firewall — its launch forms start pipelines. The store
+> is pluggable: alias `RunStoreInterface` to your own implementation (database, …) if needed.
 
 ## Running it unattended (server / CI / cron)
 

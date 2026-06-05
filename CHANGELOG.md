@@ -5,6 +5,39 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0] - 2026-06-05
+
+### Added
+- **Iterate on feedback (`ia:iterate <ticket>`)**: re-runs the coding agent on a ticket's
+  existing branch to address reviewer feedback (ticket comments + merge request discussion +
+  the MR description as "what was developed"), runs the quality gate and pushes to the same
+  branch — updating the open merge request in place. No new branch, no new MR, and the branch
+  is never deleted on failure. The browser review is re-run separately and manually once the
+  review app has redeployed.
+  - `IterateRunner`, `IteratePromptBuilder` (untrusted ticket/MR/feedback fenced like the dev
+    prompt), `IterationOutcome`. The commit reuses `MergeRequestFactory` so the configured tag
+    (e.g. `#REVIEW`) keeps triggering the review-app redeploy.
+  - `MergeRequestCommentReaderInterface` (GitLab notes / GitHub PR comments, system notes
+    filtered out) and `IterationReporterInterface` (Jira "iterated" comment).
+  - `GitInterface::checkoutBranch()` to start from the pushed remote tip.
+- **Run tracking + dashboard**: a `tracking` feature records every run (auto-dev, iterate,
+  review) the bundle launches.
+  - `RunStoreInterface` with a default append-only **JSONL** store (`JsonlRunStore`) at a
+    **configurable path** — point it at a persistent/shared location when runs happen in
+    throw-away CI containers.
+  - `ia:runs` CLI lists the runs (filter by `--type` / `--ticket`, `--json`).
+  - Opt-in HTML **dashboard** (`/ia/dashboard`) lists the runs and, when a VCS provider
+    exposing pipelines is enabled, can **launch** auto-dev / iterate / review (each triggers a
+    CI pipeline carrying the `IA_*` variables, incl. `IA_MODE`). No template engine required.
+- **Per-run review agent (`ia:review --agent`)**: pick the coding agent driving the review at
+  run time (e.g. `cursor`, `claude`), overriding `review.agent`; an unknown agent is rejected.
+
+### Changed
+- **Stricter, honest review verdict**: a third `REVIEW INCONCLUSIVE` state. The review agent
+  must NOT report PASSED when it could not execute the full scenario (missing data, cannot
+  reproduce, blocked by auth, screen not found). Inconclusive (and failed) always beat a pass
+  token, so an unverified scenario is never reported green.
+
 ## [0.5.3] - 2026-06-05
 
 ### Added

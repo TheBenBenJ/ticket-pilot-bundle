@@ -10,9 +10,11 @@ use Symfony\Component\DependencyInjection\ContainerInterface;
 use TheBenBenJ\TicketPilotBundle\Contract\PromptBuilderInterface;
 use TheBenBenJ\TicketPilotBundle\Contract\RecipeRunnerInterface;
 use TheBenBenJ\TicketPilotBundle\Contract\VcsProviderInterface;
+use TheBenBenJ\TicketPilotBundle\Controller\DashboardController;
 use TheBenBenJ\TicketPilotBundle\Controller\TriggerPipelineController;
 use TheBenBenJ\TicketPilotBundle\Registry\AgentRegistry;
 use TheBenBenJ\TicketPilotBundle\Registry\TicketSourceRegistry;
+use TheBenBenJ\TicketPilotBundle\Run\RunStoreInterface;
 use TheBenBenJ\TicketPilotBundle\TicketPilotBundle;
 
 final class BundleIntegrationTest extends TestCase
@@ -138,6 +140,21 @@ final class BundleIntegrationTest extends TestCase
         $runner = $container->get(RecipeRunnerInterface::class);
         $options = (new \ReflectionProperty($runner, 'browserOptions'))->getValue($runner);
         self::assertSame(['headless' => true, 'noSandbox' => true], $options);
+    }
+
+    public function testTrackingWiresTheRunsCommandAndDashboard(): void
+    {
+        $kernel = $this->boot([
+            'sources' => ['github' => ['enabled' => true, 'token' => 'secret', 'repository' => 'acme/app']],
+            'tracking' => ['enabled' => true, 'path' => 'var/test-runs.jsonl'],
+        ]);
+
+        $container = $kernel->getContainer()->get('test.service_container');
+        self::assertInstanceOf(ContainerInterface::class, $container);
+
+        self::assertTrue((new Application($kernel))->has('ia:runs'));
+        self::assertInstanceOf(RunStoreInterface::class, $container->get(RunStoreInterface::class));
+        self::assertTrue($container->has(DashboardController::class));
     }
 
     /**

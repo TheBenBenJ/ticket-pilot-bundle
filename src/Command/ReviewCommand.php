@@ -16,9 +16,12 @@ use TheBenBenJ\TicketPilotBundle\Contract\RecipeRunnerInterface;
 use TheBenBenJ\TicketPilotBundle\Contract\ReviewReporterInterface;
 use TheBenBenJ\TicketPilotBundle\Model\Ticket;
 use TheBenBenJ\TicketPilotBundle\Registry\TicketSourceRegistry;
+use TheBenBenJ\TicketPilotBundle\Review\AgentReviewPromptBuilder;
 use TheBenBenJ\TicketPilotBundle\Review\AgentReviewRunner;
 use TheBenBenJ\TicketPilotBundle\Review\RecipeRepository;
 use TheBenBenJ\TicketPilotBundle\Review\ReviewUrlResolver;
+use TheBenBenJ\TicketPilotBundle\Run\RunRecord;
+use TheBenBenJ\TicketPilotBundle\Run\RunStoreInterface;
 use TheBenBenJ\TicketPilotBundle\Service\BranchPlanner;
 
 /**
@@ -45,6 +48,7 @@ final class ReviewCommand extends Command
         private readonly ?RecipeRepository $recipes = null,
         private readonly ?RecipeRunnerInterface $runner = null,
         private readonly ?AgentReviewRunner $agentRunner = null,
+        private readonly ?RunStoreInterface $runs = null,
     ) {
         parent::__construct();
     }
@@ -88,7 +92,7 @@ final class ReviewCommand extends Command
 
         return 'agent' === $this->driver
             ? $this->reviewWithAgent($io, $ticket, $url, $branch, $input)
-            : $this->reviewWithRecipe($io, $ticket, $url, $input);
+            : $this->reviewWithRecipe($io, $ticket, $url, $branch, $input);
     }
 
     private function reviewWithAgent(SymfonyStyle $io, Ticket $ticket, string $url, string $branch, InputInterface $input): int
@@ -134,10 +138,16 @@ final class ReviewCommand extends Command
             }
         }
 
+        $status = $result->passed
+            ? RunRecord::STATUS_PASSED
+            : (str_contains(mb_strtoupper($result->summary), AgentReviewPromptBuilder::INCONCLUSIVE_TOKEN) ? RunRecord::STATUS_INCONCLUSIVE : RunRecord::STATUS_FAILED);
+        $agentName = $input->getOption('agent');
+        $this->record(RunRecord::create(RunRecord::TYPE_REVIEW, $ticket->key, $status, $branch, $result->summary, $url, \is_string($agentName) ? $agentName : '', (string) $input->getOption('source')));
+
         return $this->verdict($io, $ticket, $result->passed);
     }
 
-    private function reviewWithRecipe(SymfonyStyle $io, Ticket $ticket, string $url, InputInterface $input): int
+    private function reviewWithRecipe(SymfonyStyle $io, Ticket $ticket, string $url, string $branch, InputInterface $input): int
     {
         if (null === $this->recipes || null === $this->runner) {
             $io->error('The "recipe" review driver is not wired.');
@@ -172,6 +182,17 @@ final class ReviewCommand extends Command
             }
         }
 
+        $this->record(RunRecord::create(
+            RunRecord::TYPE_REVIEW,
+            $ticket->key,
+            $result->passed ? RunRecord::STATUS_PASSED : RunRecord::STATUS_FAILED,
+            $branch,
+            \sprintf('%d/%d steps passed', \count(array_filter($result->steps, static fn ($s): bool => $s->passed)), \count($result->steps)),
+            $url,
+            '',
+            (string) $input->getOption('source'),
+        ));
+
         return $this->verdict($io, $ticket, $result->passed);
     }
 
@@ -186,5 +207,16 @@ final class ReviewCommand extends Command
         $io->error(\sprintf('Review failed for %s', $ticket->key));
 
         return Command::FAILURE;
+    }
+
+    /**
+     * Records a run, best-effort: tracking must never break the review.
+     */
+    private function record(RunRecord $record): void
+    {
+        try {
+            $this->runs?->record($record);
+        } catch (\Throwable) {
+        }
     }
 }

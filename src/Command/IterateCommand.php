@@ -15,6 +15,8 @@ use TheBenBenJ\TicketPilotBundle\Exception\QualityGateFailedException;
 use TheBenBenJ\TicketPilotBundle\Exception\TicketLockedException;
 use TheBenBenJ\TicketPilotBundle\Registry\AgentRegistry;
 use TheBenBenJ\TicketPilotBundle\Registry\TicketSourceRegistry;
+use TheBenBenJ\TicketPilotBundle\Run\RunRecord;
+use TheBenBenJ\TicketPilotBundle\Run\RunStoreInterface;
 use TheBenBenJ\TicketPilotBundle\Service\BranchPlanner;
 use TheBenBenJ\TicketPilotBundle\Service\IterateRunner;
 
@@ -37,6 +39,7 @@ final class IterateCommand extends Command
         private readonly IterateRunner $runner,
         private readonly string $defaultSource,
         private readonly string $defaultAgent,
+        private readonly ?RunStoreInterface $runs = null,
     ) {
         parent::__construct();
     }
@@ -95,14 +98,17 @@ final class IterateCommand extends Command
             );
         } catch (TicketLockedException $e) {
             $io->note($e->getMessage());
+            $this->record(RunRecord::create(RunRecord::TYPE_ITERATE, $ticket->key, RunRecord::STATUS_SKIPPED, $branch, $e->getMessage(), '', $agentName, $sourceName));
 
             return Command::SUCCESS;
         } catch (QualityGateFailedException $e) {
             $io->error($e->getMessage());
+            $this->record(RunRecord::create(RunRecord::TYPE_ITERATE, $ticket->key, RunRecord::STATUS_FAILED, $branch, $e->getMessage(), '', $agentName, $sourceName));
 
             return Command::FAILURE;
         } catch (\Throwable $e) {
             $io->error(\sprintf('%s: %s', $ticket->key, $e->getMessage()));
+            $this->record(RunRecord::create(RunRecord::TYPE_ITERATE, $ticket->key, RunRecord::STATUS_FAILED, $branch, $e->getMessage(), '', $agentName, $sourceName));
 
             return Command::FAILURE;
         }
@@ -112,7 +118,19 @@ final class IterateCommand extends Command
             $io->writeln($outcome->summary);
         }
         $io->success(\sprintf('Iteration pushed to %s (%d file(s), %d feedback item(s) addressed)', $outcome->branch, \count($outcome->filesChanged), $outcome->feedbackCount));
+        $this->record(RunRecord::create(RunRecord::TYPE_ITERATE, $ticket->key, RunRecord::STATUS_SUCCESS, $outcome->branch, $outcome->summary, '', $agentName, $sourceName, $outcome->duration));
 
         return Command::SUCCESS;
+    }
+
+    /**
+     * Records a run, best-effort: tracking must never break the pipeline.
+     */
+    private function record(RunRecord $record): void
+    {
+        try {
+            $this->runs?->record($record);
+        } catch (\Throwable) {
+        }
     }
 }

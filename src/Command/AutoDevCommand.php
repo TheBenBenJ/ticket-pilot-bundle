@@ -13,6 +13,8 @@ use Symfony\Component\Console\Style\SymfonyStyle;
 use TheBenBenJ\TicketPilotBundle\Exception\TicketLockedException;
 use TheBenBenJ\TicketPilotBundle\Registry\AgentRegistry;
 use TheBenBenJ\TicketPilotBundle\Registry\TicketSourceRegistry;
+use TheBenBenJ\TicketPilotBundle\Run\RunRecord;
+use TheBenBenJ\TicketPilotBundle\Run\RunStoreInterface;
 use TheBenBenJ\TicketPilotBundle\Security\TicketGuard;
 use TheBenBenJ\TicketPilotBundle\Service\AutoDevRunner;
 use TheBenBenJ\TicketPilotBundle\Service\BranchPlanner;
@@ -35,6 +37,7 @@ final class AutoDevCommand extends Command
         private readonly TicketGuard $ticketGuard,
         private readonly string $defaultSource,
         private readonly string $defaultAgent,
+        private readonly ?RunStoreInterface $runs = null,
     ) {
         parent::__construct();
     }
@@ -135,13 +138,16 @@ final class AutoDevCommand extends Command
                 );
                 $io->success(\sprintf('MR/PR #%d created: %s', $outcome->mergeRequest->number, $outcome->mergeRequest->url));
                 ++$succeeded;
+                $this->record(RunRecord::create(RunRecord::TYPE_AUTO_DEV, $ticket->key, RunRecord::STATUS_SUCCESS, $plan->branch, $ticket->title, $outcome->mergeRequest->url, $agentName, $sourceName, $outcome->duration));
             } catch (TicketLockedException $e) {
                 // Another concurrent run owns this ticket — not a failure, just skip it.
                 $io->note($e->getMessage());
                 ++$skipped;
+                $this->record(RunRecord::create(RunRecord::TYPE_AUTO_DEV, $ticket->key, RunRecord::STATUS_SKIPPED, $plan->branch, $e->getMessage(), '', $agentName, $sourceName));
             } catch (\Throwable $e) {
                 $io->error(\sprintf('%s: %s', $ticket->key, $e->getMessage()));
                 ++$failed;
+                $this->record(RunRecord::create(RunRecord::TYPE_AUTO_DEV, $ticket->key, RunRecord::STATUS_FAILED, $plan->branch, $e->getMessage(), '', $agentName, $sourceName));
             }
         }
 
@@ -155,5 +161,16 @@ final class AutoDevCommand extends Command
         }
 
         return $failed > 0 ? Command::FAILURE : Command::SUCCESS;
+    }
+
+    /**
+     * Records a run, best-effort: tracking must never break the pipeline.
+     */
+    private function record(RunRecord $record): void
+    {
+        try {
+            $this->runs?->record($record);
+        } catch (\Throwable) {
+        }
     }
 }

@@ -44,8 +44,21 @@ final class Configuration implements ConfigurationInterface
         $this->addHttpSection($root);
         $this->addReviewSection($root);
         $this->addAttachmentsSection($root);
+        $this->addTrackingSection($root);
 
         return $treeBuilder;
+    }
+
+    private function addTrackingSection(\Symfony\Component\Config\Definition\Builder\ArrayNodeDefinition $root): void
+    {
+        $root->children()->arrayNode('tracking')->canBeEnabled()->children()
+            ->scalarNode('path')->defaultValue('var/ticket-pilot/runs.jsonl')
+                ->info('JSONL file recording every run. Relative paths are resolved from the project dir; point it at a persistent/shared location (volume) when runs happen in throw-away CI containers.')
+            ->end()
+            ->booleanNode('dashboard')->defaultTrue()
+                ->info('Register the HTTP dashboard controller (the route is still imported manually). Lists the runs and can launch new ones when a VCS provider exposing pipelines is enabled.')
+            ->end()
+        ->end()->end();
     }
 
     private function addAttachmentsSection(\Symfony\Component\Config\Definition\Builder\ArrayNodeDefinition $root): void

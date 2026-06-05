@@ -39,12 +39,25 @@ final class TestKernel extends Kernel
     public function registerContainerConfiguration(LoaderInterface $loader): void
     {
         $loader->load(function (ContainerBuilder $container): void {
-            $container->loadFromExtension('framework', [
+            $framework = [
                 'test' => true,
                 'http_method_override' => false,
                 'secret' => 'test',
                 'http_client' => true,
-            ]);
+            ];
+
+            // The dashboard controllers depend on the router; enable it (and load the
+            // bundle routes) only when tracking is under test, so the other tests keep
+            // a minimal container.
+            if ($this->bundleConfig['tracking']['enabled'] ?? false) {
+                $framework['router'] = [
+                    'resource' => '%kernel.project_dir%/src/Resources/config/routes.php',
+                    'type' => 'php',
+                    'utf8' => true,
+                ];
+            }
+
+            $container->loadFromExtension('framework', $framework);
 
             $container->loadFromExtension('ticket_pilot', $this->bundleConfig);
         });
