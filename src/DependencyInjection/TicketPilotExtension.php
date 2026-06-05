@@ -18,10 +18,12 @@ use TheBenBenJ\TicketPilotBundle\Agent\CursorAgent;
 use TheBenBenJ\TicketPilotBundle\Command\AutoDevCommand;
 use TheBenBenJ\TicketPilotBundle\Command\CreateMergeRequestCommand;
 use TheBenBenJ\TicketPilotBundle\Command\ListTicketsCommand;
+use TheBenBenJ\TicketPilotBundle\Command\ReviewCommand;
 use TheBenBenJ\TicketPilotBundle\Command\ShowPromptCommand;
 use TheBenBenJ\TicketPilotBundle\Contract\PipelineTriggerInterface;
 use TheBenBenJ\TicketPilotBundle\Contract\PromptBuilderInterface;
 use TheBenBenJ\TicketPilotBundle\Contract\QualityGateInterface;
+use TheBenBenJ\TicketPilotBundle\Contract\RecipeRunnerInterface;
 use TheBenBenJ\TicketPilotBundle\Contract\VcsProviderInterface;
 use TheBenBenJ\TicketPilotBundle\Controller\TriggerPipelineController;
 use TheBenBenJ\TicketPilotBundle\Git\GitClient;
@@ -30,6 +32,11 @@ use TheBenBenJ\TicketPilotBundle\Prompt\DefaultPromptBuilder;
 use TheBenBenJ\TicketPilotBundle\Quality\CommandQualityGate;
 use TheBenBenJ\TicketPilotBundle\Registry\AgentRegistry;
 use TheBenBenJ\TicketPilotBundle\Registry\TicketSourceRegistry;
+use TheBenBenJ\TicketPilotBundle\Review\ChromeRecipeRunner;
+use TheBenBenJ\TicketPilotBundle\Review\RecipeExecutor;
+use TheBenBenJ\TicketPilotBundle\Review\RecipeFactory;
+use TheBenBenJ\TicketPilotBundle\Review\RecipeRepository;
+use TheBenBenJ\TicketPilotBundle\Review\ReviewUrlResolver;
 use TheBenBenJ\TicketPilotBundle\Security\TicketGuard;
 use TheBenBenJ\TicketPilotBundle\Service\AutoDevOptions;
 use TheBenBenJ\TicketPilotBundle\Service\AutoDevRunner;
@@ -60,6 +67,46 @@ final class TicketPilotExtension extends Extension
         $hasVcs = $this->registerVcs($container, $config, $httpClient, $logger);
         $this->registerQuality($container, $config, $projectDir, $logger);
         $this->registerOrchestration($container, $config, $projectDir, $hasVcs);
+        $this->registerReview($container, $config, $projectDir);
+    }
+
+    /**
+     * @param array<string, mixed> $config
+     */
+    private function registerReview(ContainerBuilder $container, array $config, string $projectDir): void
+    {
+        if (!$config['review']['enabled']) {
+            return;
+        }
+
+        $review = $config['review'];
+        $base = rtrim($projectDir, '/');
+
+        $container->setDefinition(RecipeFactory::class, new Definition(RecipeFactory::class));
+        $container->setDefinition(RecipeRepository::class, new Definition(RecipeRepository::class, [
+            $base.'/'.ltrim($review['recipes_dir'], '/'),
+            new Reference(RecipeFactory::class),
+        ]));
+        $container->setDefinition(RecipeExecutor::class, new Definition(RecipeExecutor::class, [
+            $base.'/'.ltrim($review['screenshot_dir'], '/'),
+            $review['wait_timeout'],
+        ]));
+        $container->setDefinition(ChromeRecipeRunner::class, new Definition(ChromeRecipeRunner::class, [
+            new Reference(RecipeExecutor::class),
+            $review['chrome_binary'],
+            ['headless' => true],
+        ]));
+        $container->setAlias(RecipeRunnerInterface::class, ChromeRecipeRunner::class);
+        $container->setDefinition(ReviewUrlResolver::class, new Definition(ReviewUrlResolver::class, [$review['url_pattern']]));
+
+        $this->registerCommand($container, ReviewCommand::class, [
+            new Reference(TicketSourceRegistry::class),
+            new Reference(BranchPlanner::class),
+            new Reference(RecipeRepository::class),
+            new Reference(ReviewUrlResolver::class),
+            new Reference(RecipeRunnerInterface::class),
+            '%ticket_pilot.default_source%',
+        ]);
     }
 
     public function getAlias(): string
@@ -109,6 +156,10 @@ final class TicketPilotExtension extends Extension
         ]));
 
         $prompt = $config['prompt'];
+        $reviewRecipePath = ($config['review']['enabled'] && $config['review']['write_recipe'])
+            ? rtrim($config['review']['recipes_dir'], '/').'/{key}.yaml'
+            : '';
+
         $container->setDefinition(DefaultPromptBuilder::class, new Definition(DefaultPromptBuilder::class, [
             $prompt['language'],
             $prompt['quality_commands'],
@@ -117,6 +168,7 @@ final class TicketPilotExtension extends Extension
             $prompt['extra_instructions'],
             $projectDir,
             $prompt['convention_files'],
+            $reviewRecipePath,
         ]));
         $container->setAlias(PromptBuilderInterface::class, DefaultPromptBuilder::class)->setPublic(true);
 

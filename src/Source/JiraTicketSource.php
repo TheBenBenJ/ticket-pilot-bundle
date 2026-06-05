@@ -8,10 +8,13 @@ use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
 use Symfony\Contracts\HttpClient\Exception\ExceptionInterface as HttpExceptionInterface;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
+use TheBenBenJ\TicketPilotBundle\Contract\ReviewReporterInterface;
 use TheBenBenJ\TicketPilotBundle\Contract\TicketReporterInterface;
 use TheBenBenJ\TicketPilotBundle\Contract\TicketSourceInterface;
 use TheBenBenJ\TicketPilotBundle\Model\MergeRequest;
 use TheBenBenJ\TicketPilotBundle\Model\Ticket;
+use TheBenBenJ\TicketPilotBundle\Review\RecipeResult;
+use TheBenBenJ\TicketPilotBundle\Review\ReviewSummary;
 
 /**
  * Reads tickets from a Jira Cloud instance (REST API v3).
@@ -19,7 +22,7 @@ use TheBenBenJ\TicketPilotBundle\Model\Ticket;
  * Pending tickets are selected by JQL: a configurable label at a configurable
  * status, ordered by priority then creation date.
  */
-final class JiraTicketSource implements TicketSourceInterface, TicketReporterInterface
+final class JiraTicketSource implements TicketSourceInterface, TicketReporterInterface, ReviewReporterInterface
 {
     private const NAME = 'jira';
 
@@ -102,23 +105,33 @@ final class JiraTicketSource implements TicketSourceInterface, TicketReporterInt
 
     public function reportMergeRequest(Ticket $ticket, MergeRequest $mergeRequest): void
     {
-        $text = \sprintf('🤖 Merge request opened: %s', $mergeRequest->url);
+        $this->postComment($ticket->key, \sprintf('🤖 Merge request opened: %s', $mergeRequest->url));
+    }
+
+    public function reportReview(Ticket $ticket, RecipeResult $result): void
+    {
+        $this->postComment($ticket->key, ReviewSummary::plain($ticket, $result));
+    }
+
+    /**
+     * Posts a comment, turning each text line into an ADF paragraph (Jira v3 requires ADF).
+     */
+    private function postComment(string $key, string $text): void
+    {
+        $paragraphs = array_map(
+            static fn (string $line): array => [
+                'type' => 'paragraph',
+                'content' => [['type' => 'text', 'text' => '' !== $line ? $line : ' ']],
+            ],
+            explode("\n", $text),
+        );
 
         try {
-            $this->client->request('POST', \sprintf('rest/api/3/issue/%s/comment', $ticket->key), [
-                'json' => [
-                    'body' => [
-                        'type' => 'doc',
-                        'version' => 1,
-                        'content' => [[
-                            'type' => 'paragraph',
-                            'content' => [['type' => 'text', 'text' => $text]],
-                        ]],
-                    ],
-                ],
+            $this->client->request('POST', \sprintf('rest/api/3/issue/%s/comment', $key), [
+                'json' => ['body' => ['type' => 'doc', 'version' => 1, 'content' => $paragraphs]],
             ])->getStatusCode();
         } catch (HttpExceptionInterface $e) {
-            $this->logger->warning(\sprintf('JiraTicketSource::reportMergeRequest(%s) failed: %s', $ticket->key, $e->getMessage()));
+            $this->logger->warning(\sprintf('JiraTicketSource::postComment(%s) failed: %s', $key, $e->getMessage()));
         }
     }
 

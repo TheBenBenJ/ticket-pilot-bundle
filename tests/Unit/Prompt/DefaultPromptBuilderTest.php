@@ -92,6 +92,21 @@ final class DefaultPromptBuilderTest extends TestCase
         }
     }
 
+    public function testReviewRecipeInstructionIsAddedWhenConfigured(): void
+    {
+        $builder = new DefaultPromptBuilder(reviewRecipePath: '.ticket-pilot/recipes/{key}.yaml');
+
+        $prompt = $builder->build($this->ticket());
+
+        self::assertStringContainsString('Browser test recipe', $prompt);
+        self::assertStringContainsString('.ticket-pilot/recipes/PROJ-42.yaml', $prompt);
+    }
+
+    public function testNoReviewRecipeInstructionByDefault(): void
+    {
+        self::assertStringNotContainsString('Browser test recipe', (new DefaultPromptBuilder())->build($this->ticket()));
+    }
+
     private function ticket(): Ticket
     {
         return new Ticket(

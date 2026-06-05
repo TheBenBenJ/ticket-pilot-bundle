@@ -38,6 +38,7 @@ final class DefaultPromptBuilder implements PromptBuilderInterface
         private readonly string $extraInstructions = '',
         private readonly string $projectDir = '',
         private readonly array $conventionFiles = [],
+        private readonly string $reviewRecipePath = '',
     ) {
     }
 
@@ -68,7 +69,45 @@ final class DefaultPromptBuilder implements PromptBuilderInterface
 
         $parts[] = $this->instructions();
 
+        if ('' !== $this->reviewRecipePath) {
+            $parts[] = $this->reviewRecipe($ticket->key);
+        }
+
         return implode("\n", array_filter($parts, static fn (string $p): bool => '' !== trim($p)));
+    }
+
+    private function reviewRecipe(string $key): string
+    {
+        $path = strtr($this->reviewRecipePath, ['{key}' => $key, '{ticket}' => $key]);
+
+        return <<<PROMPT
+
+            ## Browser test recipe (MANDATORY)
+            Also write a browser test recipe to `{$path}` describing how to verify this feature
+            in a browser. It is replayed later by `ia:review`. YAML format:
+
+            description: <what this verifies>
+            steps:
+                - action: visit
+                  target: "/path"
+                - action: fill
+                  target: "#field"
+                  value: "..."
+                - action: click
+                  target: "button[type=submit]"
+                - action: wait_for
+                  target: ".result"
+                - action: assert_selector
+                  target: ".alert-success"
+                - action: assert_see
+                  value: "Expected text"
+                - action: screenshot
+                  value: "result"
+
+            Allowed actions: visit, click, fill, wait_for, assert_selector, assert_see,
+            assert_not_see, screenshot. Use selectors that exist in the code you wrote, with
+            relative paths (the base URL is provided at review time). Keep it focused.
+            PROMPT;
     }
 
     /**

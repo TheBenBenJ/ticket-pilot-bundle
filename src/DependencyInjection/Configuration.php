@@ -42,8 +42,31 @@ final class Configuration implements ConfigurationInterface
         $this->addCommitSection($root);
         $this->addSecuritySection($root);
         $this->addHttpSection($root);
+        $this->addReviewSection($root);
 
         return $treeBuilder;
+    }
+
+    private function addReviewSection(\Symfony\Component\Config\Definition\Builder\ArrayNodeDefinition $root): void
+    {
+        $root->children()->arrayNode('review')->canBeEnabled()->children()
+            ->scalarNode('recipes_dir')->defaultValue('.ticket-pilot/recipes')
+                ->info('Directory (relative to the project) where the agent writes/reads test recipes.')
+            ->end()
+            ->scalarNode('url_pattern')->defaultValue('')
+                ->info('Base URL pattern with {ticket}/{key}/{branch}/{branch_slug} placeholders; --url overrides it.')
+            ->end()
+            ->booleanNode('write_recipe')->defaultTrue()
+                ->info('Instruct the agent to author the test recipe during ia:auto-dev.')
+            ->end()
+            ->scalarNode('chrome_binary')->defaultValue('')
+                ->info('Path to the Chromium/Chrome binary (empty = auto-detect).')
+            ->end()
+            ->scalarNode('screenshot_dir')->defaultValue('var/ticket-pilot/screenshots')->end()
+            ->integerNode('wait_timeout')->defaultValue(5000)->min(0)
+                ->info('Timeout (ms) for wait_for steps.')
+            ->end()
+        ->end()->end();
     }
 
     private function addHttpSection(\Symfony\Component\Config\Definition\Builder\ArrayNodeDefinition $root): void

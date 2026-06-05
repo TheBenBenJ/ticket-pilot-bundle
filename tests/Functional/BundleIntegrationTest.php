@@ -112,6 +112,16 @@ final class BundleIntegrationTest extends TestCase
         self::assertTrue($application->has('ia:auto-dev'));
     }
 
+    public function testReviewEnabledWiresTheReviewCommand(): void
+    {
+        $kernel = $this->boot([
+            'sources' => ['github' => ['enabled' => true, 'token' => 'secret', 'repository' => 'acme/app']],
+            'review' => ['enabled' => true, 'url_pattern' => 'https://{branch_slug}.review.example.com'],
+        ]);
+
+        self::assertTrue((new Application($kernel))->has('ia:review'));
+    }
+
     /**
      * @param array<string, mixed> $config
      */

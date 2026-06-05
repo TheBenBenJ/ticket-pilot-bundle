@@ -8,10 +8,13 @@ use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
 use Symfony\Contracts\HttpClient\Exception\ExceptionInterface as HttpExceptionInterface;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
+use TheBenBenJ\TicketPilotBundle\Contract\ReviewReporterInterface;
 use TheBenBenJ\TicketPilotBundle\Contract\TicketReporterInterface;
 use TheBenBenJ\TicketPilotBundle\Contract\TicketSourceInterface;
 use TheBenBenJ\TicketPilotBundle\Model\MergeRequest;
 use TheBenBenJ\TicketPilotBundle\Model\Ticket;
+use TheBenBenJ\TicketPilotBundle\Review\RecipeResult;
+use TheBenBenJ\TicketPilotBundle\Review\ReviewSummary;
 
 /**
  * Reads open issues from a GitHub repository (REST API v3).
@@ -21,7 +24,7 @@ use TheBenBenJ\TicketPilotBundle\Model\Ticket;
  * key is the issue number; an issue carrying the configured bug label is typed
  * as a bug so the branch planner routes it to the hotfix flow.
  */
-final class GitHubIssueSource implements TicketSourceInterface, TicketReporterInterface
+final class GitHubIssueSource implements TicketSourceInterface, TicketReporterInterface, ReviewReporterInterface
 {
     private const NAME = 'github';
 
@@ -114,16 +117,26 @@ final class GitHubIssueSource implements TicketSourceInterface, TicketReporterIn
 
     public function reportMergeRequest(Ticket $ticket, MergeRequest $mergeRequest): void
     {
-        $number = preg_replace('/\D+/', '', $ticket->key) ?: $ticket->key;
+        $this->postComment($ticket->key, \sprintf('🤖 Pull request opened: %s', $mergeRequest->url));
+    }
+
+    public function reportReview(Ticket $ticket, RecipeResult $result): void
+    {
+        $this->postComment($ticket->key, ReviewSummary::plain($ticket, $result));
+    }
+
+    private function postComment(string $key, string $body): void
+    {
+        $number = preg_replace('/\D+/', '', $key) ?: $key;
 
         try {
             $this->client->request(
                 'POST',
                 \sprintf('repos/%s/%s/issues/%s/comments', $this->owner, $this->repo, $number),
-                ['json' => ['body' => \sprintf('🤖 Pull request opened: %s', $mergeRequest->url)]],
+                ['json' => ['body' => $body]],
             )->getStatusCode();
         } catch (HttpExceptionInterface $e) {
-            $this->logger->warning(\sprintf('GitHubIssueSource::reportMergeRequest(%s) failed: %s', $number, $e->getMessage()));
+            $this->logger->warning(\sprintf('GitHubIssueSource::postComment(%s) failed: %s', $number, $e->getMessage()));
         }
     }
 
