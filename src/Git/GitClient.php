@@ -69,6 +69,14 @@ final class GitClient implements GitInterface
         $this->mustRun(['checkout', '-b', $branch]);
     }
 
+    public function checkoutBranch(string $branch): void
+    {
+        $this->mustRun(['fetch', 'origin', $branch]);
+        // -B creates or resets the local branch to the freshly fetched remote tip,
+        // so iterating always starts from what the previous run actually pushed.
+        $this->mustRun(['checkout', '-B', $branch, 'origin/'.$branch]);
+    }
+
     /**
      * Best-effort deletion of a local branch: checks out the fallback branch first,
      * then force-deletes the branch. Never throws (used during failure cleanup).

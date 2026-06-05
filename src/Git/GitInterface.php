@@ -28,6 +28,14 @@ interface GitInterface
     public function createBranch(string $branch, string $base): void;
 
     /**
+     * Checks out an EXISTING branch (fetched from origin), resetting the local
+     * copy to the remote tip. Used to iterate on a branch a previous run pushed.
+     *
+     * @throws \RuntimeException when the branch cannot be fetched/checked out
+     */
+    public function checkoutBranch(string $branch): void;
+
+    /**
      * Stages every change, un-stages the excluded paths, commits and pushes.
      *
      * @param list<string> $excludePaths Paths the commit must never include

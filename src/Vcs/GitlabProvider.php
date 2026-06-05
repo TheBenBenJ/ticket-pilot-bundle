@@ -8,6 +8,7 @@ use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
 use Symfony\Contracts\HttpClient\Exception\ExceptionInterface as HttpExceptionInterface;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
+use TheBenBenJ\TicketPilotBundle\Contract\MergeRequestCommentReaderInterface;
 use TheBenBenJ\TicketPilotBundle\Contract\MergeRequestReaderInterface;
 use TheBenBenJ\TicketPilotBundle\Contract\PipelineTriggerInterface;
 use TheBenBenJ\TicketPilotBundle\Contract\VcsProviderInterface;
@@ -17,7 +18,7 @@ use TheBenBenJ\TicketPilotBundle\Model\Pipeline;
 /**
  * GitLab implementation of the VCS contracts (REST API v4).
  */
-final class GitlabProvider implements VcsProviderInterface, PipelineTriggerInterface, MergeRequestReaderInterface
+final class GitlabProvider implements VcsProviderInterface, PipelineTriggerInterface, MergeRequestReaderInterface, MergeRequestCommentReaderInterface
 {
     private readonly HttpClientInterface $client;
     private readonly LoggerInterface $logger;
@@ -82,6 +83,48 @@ final class GitlabProvider implements VcsProviderInterface, PipelineTriggerInter
             $this->logger->warning(\sprintf('mergeRequestDescription(%s) failed: %s', $sourceBranch, $e->getMessage()));
 
             return '';
+        }
+    }
+
+    public function mergeRequestComments(string $sourceBranch): array
+    {
+        try {
+            $mrs = $this->client->request(
+                'GET',
+                \sprintf('api/v4/projects/%d/merge_requests', $this->projectId()),
+                ['query' => ['source_branch' => $sourceBranch, 'order_by' => 'updated_at', 'per_page' => 1]],
+            )->toArray();
+
+            $iid = $mrs[0]['iid'] ?? null;
+            if (null === $iid) {
+                return [];
+            }
+
+            $notes = $this->client->request(
+                'GET',
+                \sprintf('api/v4/projects/%d/merge_requests/%d/notes', $this->projectId(), (int) $iid),
+                ['query' => ['sort' => 'asc', 'order_by' => 'created_at', 'per_page' => 100]],
+            )->toArray();
+
+            $comments = [];
+            foreach ($notes as $note) {
+                // Skip GitLab's automated/system notes (status changes, label edits, …).
+                if (true === ($note['system'] ?? false)) {
+                    continue;
+                }
+                $body = trim((string) ($note['body'] ?? ''));
+                if ('' === $body) {
+                    continue;
+                }
+                $author = (string) ($note['author']['name'] ?? $note['author']['username'] ?? 'Reviewer');
+                $comments[] = \sprintf('%s: %s', $author, $body);
+            }
+
+            return $comments;
+        } catch (HttpExceptionInterface $e) {
+            $this->logger->warning(\sprintf('mergeRequestComments(%s) failed: %s', $sourceBranch, $e->getMessage()));
+
+            return [];
         }
     }
 

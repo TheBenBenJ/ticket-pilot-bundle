@@ -10,6 +10,7 @@ use Symfony\Contracts\HttpClient\Exception\ExceptionInterface as HttpExceptionIn
 use Symfony\Contracts\HttpClient\HttpClientInterface;
 use TheBenBenJ\TicketPilotBundle\Contract\AgentReviewReporterInterface;
 use TheBenBenJ\TicketPilotBundle\Contract\AttachmentDownloaderInterface;
+use TheBenBenJ\TicketPilotBundle\Contract\IterationReporterInterface;
 use TheBenBenJ\TicketPilotBundle\Contract\ReviewReporterInterface;
 use TheBenBenJ\TicketPilotBundle\Contract\TicketReporterInterface;
 use TheBenBenJ\TicketPilotBundle\Contract\TicketSourceInterface;
@@ -26,7 +27,7 @@ use TheBenBenJ\TicketPilotBundle\Review\ReviewSummary;
  * Pending tickets are selected by JQL: a configurable label at a configurable
  * status, ordered by priority then creation date.
  */
-final class JiraTicketSource implements TicketSourceInterface, TicketReporterInterface, ReviewReporterInterface, AgentReviewReporterInterface, AttachmentDownloaderInterface
+final class JiraTicketSource implements TicketSourceInterface, TicketReporterInterface, ReviewReporterInterface, AgentReviewReporterInterface, AttachmentDownloaderInterface, IterationReporterInterface
 {
     private const NAME = 'jira';
 
@@ -110,6 +111,12 @@ final class JiraTicketSource implements TicketSourceInterface, TicketReporterInt
     public function reportMergeRequest(Ticket $ticket, MergeRequest $mergeRequest): void
     {
         $this->postComment($ticket->key, \sprintf('🤖 Merge request opened: %s', $mergeRequest->url));
+    }
+
+    public function reportIteration(Ticket $ticket, string $branch, string $summary): void
+    {
+        $text = \sprintf("🤖 Iterated on %s after feedback:\n%s", $branch, '' !== trim($summary) ? $summary : '(no summary)');
+        $this->postComment($ticket->key, $text);
     }
 
     public function reportReview(Ticket $ticket, RecipeResult $result): void

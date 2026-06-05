@@ -8,6 +8,7 @@ use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
 use Symfony\Contracts\HttpClient\Exception\ExceptionInterface as HttpExceptionInterface;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
+use TheBenBenJ\TicketPilotBundle\Contract\MergeRequestCommentReaderInterface;
 use TheBenBenJ\TicketPilotBundle\Contract\MergeRequestReaderInterface;
 use TheBenBenJ\TicketPilotBundle\Contract\PipelineTriggerInterface;
 use TheBenBenJ\TicketPilotBundle\Contract\VcsProviderInterface;
@@ -21,7 +22,7 @@ use TheBenBenJ\TicketPilotBundle\Model\Pipeline;
  * `repository_dispatch` event carrying the auto-dev variables as client payload,
  * which a GitHub Actions workflow can react to.
  */
-final class GitHubProvider implements VcsProviderInterface, PipelineTriggerInterface, MergeRequestReaderInterface
+final class GitHubProvider implements VcsProviderInterface, PipelineTriggerInterface, MergeRequestReaderInterface, MergeRequestCommentReaderInterface
 {
     private readonly HttpClientInterface $client;
     private readonly LoggerInterface $logger;
@@ -95,6 +96,46 @@ final class GitHubProvider implements VcsProviderInterface, PipelineTriggerInter
             $this->logger->warning(\sprintf('mergeRequestDescription(%s) failed: %s', $sourceBranch, $e->getMessage()));
 
             return '';
+        }
+    }
+
+    public function mergeRequestComments(string $sourceBranch): array
+    {
+        try {
+            $pulls = $this->client->request(
+                'GET',
+                \sprintf('repos/%s/%s/pulls', $this->owner, $this->repo),
+                ['query' => ['head' => \sprintf('%s:%s', $this->owner, $sourceBranch), 'state' => 'all', 'per_page' => 1]],
+            )->toArray();
+
+            $number = $pulls[0]['number'] ?? null;
+            if (null === $number) {
+                return [];
+            }
+
+            // Issue comments cover the PR conversation (the pulls/comments endpoint
+            // only returns inline diff review comments).
+            $notes = $this->client->request(
+                'GET',
+                \sprintf('repos/%s/%s/issues/%d/comments', $this->owner, $this->repo, (int) $number),
+                ['query' => ['per_page' => 100]],
+            )->toArray();
+
+            $comments = [];
+            foreach ($notes as $note) {
+                $body = trim((string) ($note['body'] ?? ''));
+                if ('' === $body) {
+                    continue;
+                }
+                $author = (string) ($note['user']['login'] ?? 'Reviewer');
+                $comments[] = \sprintf('%s: %s', $author, $body);
+            }
+
+            return $comments;
+        } catch (HttpExceptionInterface $e) {
+            $this->logger->warning(\sprintf('mergeRequestComments(%s) failed: %s', $sourceBranch, $e->getMessage()));
+
+            return [];
         }
     }
 

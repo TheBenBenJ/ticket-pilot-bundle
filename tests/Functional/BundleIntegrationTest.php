@@ -111,6 +111,8 @@ final class BundleIntegrationTest extends TestCase
 
         $application = new Application($kernel);
         self::assertTrue($application->has('ia:auto-dev'));
+        // Iterating on feedback needs a VCS provider too, so it is wired alongside auto-dev.
+        self::assertTrue($application->has('ia:iterate'));
     }
 
     public function testReviewEnabledWiresTheReviewCommand(): void

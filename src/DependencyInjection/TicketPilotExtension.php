@@ -19,6 +19,7 @@ use TheBenBenJ\TicketPilotBundle\Attachment\AttachmentCollector;
 use TheBenBenJ\TicketPilotBundle\Attachment\DocumentConverter;
 use TheBenBenJ\TicketPilotBundle\Command\AutoDevCommand;
 use TheBenBenJ\TicketPilotBundle\Command\CreateMergeRequestCommand;
+use TheBenBenJ\TicketPilotBundle\Command\IterateCommand;
 use TheBenBenJ\TicketPilotBundle\Command\ListTicketsCommand;
 use TheBenBenJ\TicketPilotBundle\Command\ReviewCommand;
 use TheBenBenJ\TicketPilotBundle\Command\ShowPromptCommand;
@@ -32,6 +33,7 @@ use TheBenBenJ\TicketPilotBundle\Controller\TriggerPipelineController;
 use TheBenBenJ\TicketPilotBundle\Git\GitClient;
 use TheBenBenJ\TicketPilotBundle\Git\GitInterface;
 use TheBenBenJ\TicketPilotBundle\Prompt\DefaultPromptBuilder;
+use TheBenBenJ\TicketPilotBundle\Prompt\IteratePromptBuilder;
 use TheBenBenJ\TicketPilotBundle\Quality\CommandQualityGate;
 use TheBenBenJ\TicketPilotBundle\Registry\AgentRegistry;
 use TheBenBenJ\TicketPilotBundle\Registry\TicketSourceRegistry;
@@ -47,6 +49,7 @@ use TheBenBenJ\TicketPilotBundle\Security\TicketGuard;
 use TheBenBenJ\TicketPilotBundle\Service\AutoDevOptions;
 use TheBenBenJ\TicketPilotBundle\Service\AutoDevRunner;
 use TheBenBenJ\TicketPilotBundle\Service\BranchPlanner;
+use TheBenBenJ\TicketPilotBundle\Service\IterateRunner;
 use TheBenBenJ\TicketPilotBundle\Service\MergeRequestFactory;
 use TheBenBenJ\TicketPilotBundle\Source\GitHubIssueSource;
 use TheBenBenJ\TicketPilotBundle\Source\JiraTicketSource;
@@ -500,6 +503,35 @@ final class TicketPilotExtension extends Extension
             new Reference(MergeRequestFactory::class),
             new Reference(VcsProviderInterface::class),
             '%ticket_pilot.default_source%',
+        ]);
+
+        $prompt = $config['prompt'];
+        $container->setDefinition(IteratePromptBuilder::class, new Definition(IteratePromptBuilder::class, [
+            $prompt['language'],
+            $prompt['quality_commands'],
+            $prompt['summary_start_marker'],
+            $prompt['summary_end_marker'],
+            $prompt['extra_instructions'],
+        ]));
+        $container->setDefinition(IterateRunner::class, new Definition(IterateRunner::class, [
+            new Reference(AgentRegistry::class),
+            new Reference(IteratePromptBuilder::class),
+            new Reference(MergeRequestFactory::class),
+            new Reference(GitClient::class),
+            new Reference(VcsProviderInterface::class),
+            $options,
+            $prompt['summary_start_marker'],
+            $prompt['summary_end_marker'],
+            $config['quality']['enabled'] ? new Reference(QualityGateInterface::class) : null,
+            new Reference('lock.factory', ContainerBuilder::NULL_ON_INVALID_REFERENCE),
+        ]));
+        $this->registerCommand($container, IterateCommand::class, [
+            new Reference(TicketSourceRegistry::class),
+            new Reference(AgentRegistry::class),
+            new Reference(BranchPlanner::class),
+            new Reference(IterateRunner::class),
+            '%ticket_pilot.default_source%',
+            '%ticket_pilot.default_agent%',
         ]);
     }
 
