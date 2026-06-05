@@ -24,6 +24,7 @@
         "symfony/yaml": "^6.4 || ^7.0"
     },
     "require-dev": {
+        "chrome-php/chrome": "^1.10",
         "friendsofphp/php-cs-fixer": "^3.50",
         "phpstan/phpstan": "^1.11",
         "phpunit/phpunit": "^10.5 || ^11.0",
@@ -35,7 +36,8 @@
     "suggest": {
         "symfony/http-client": "Required by the bundled Jira, Sentry and GitLab integrations",
         "symfony/routing": "Required to expose the pipeline-trigger HTTP endpoint",
-        "symfony/lock": "Enables per-ticket locking so concurrent batch/cron runs never process the same ticket twice (configure framework.lock)"
+        "symfony/lock": "Enables per-ticket locking so concurrent batch/cron runs never process the same ticket twice (configure framework.lock)",
+        "chrome-php/chrome": "Required by the browser review runner (ia:review) to replay recipes in headless Chromium"
     },
     "autoload": {
         "psr-4": {
