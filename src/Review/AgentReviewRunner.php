@@ -29,6 +29,7 @@ final class AgentReviewRunner
         private readonly string $summaryStartMarker = '<<<REVIEW_SUMMARY',
         private readonly string $summaryEndMarker = 'REVIEW_SUMMARY>>>',
         private readonly ?MergeRequestReaderInterface $mergeRequestReader = null,
+        private readonly ?ReviewReportRenderer $reportRenderer = null,
     ) {
     }
 
@@ -53,10 +54,12 @@ final class AgentReviewRunner
 
         $result = $this->agents->get($this->agentName)->run($prompt, $model, $onOutput);
 
-        $screenshots = $this->collectScreenshots($startedAt);
         $summary = $this->extractSummary($result->output);
+        $screenshots = $this->selectReported($this->collectScreenshots($startedAt), $summary);
+        $passed = $this->verdict($summary);
+        $reportPdf = $this->reportRenderer?->render($ticket, $passed, $summary, $screenshots);
 
-        return new AgentReviewResult($this->verdict($summary), $summary, $screenshots, $result->output);
+        return new AgentReviewResult($passed, $summary, $screenshots, $result->output, $reportPdf);
     }
 
     private function ensureScreenshotDir(): void
@@ -90,6 +93,26 @@ final class AgentReviewRunner
         sort($shots);
 
         return $shots;
+    }
+
+    /**
+     * Keeps only the screenshots the agent deemed worth reporting (the ones it
+     * lists by name in its summary), so the ticket gets the meaningful shots and
+     * not every intermediate capture. Falls back to all when the summary names
+     * none of them (never lose the evidence).
+     *
+     * @param list<string> $screenshots
+     *
+     * @return list<string>
+     */
+    public function selectReported(array $screenshots, string $summary): array
+    {
+        $mentioned = array_values(array_filter(
+            $screenshots,
+            static fn (string $f): bool => str_contains($summary, basename($f)),
+        ));
+
+        return [] !== $mentioned ? $mentioned : $screenshots;
     }
 
     /**

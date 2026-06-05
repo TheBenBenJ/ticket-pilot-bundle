@@ -112,6 +112,15 @@ final class Configuration implements ConfigurationInterface
             ->scalarNode('summary_end_marker')->defaultValue('REVIEW_SUMMARY>>>')
                 ->info('[agent driver] Closing marker of the verdict block.')
             ->end()
+            ->arrayNode('report')->addDefaultsIfNotSet()->children()
+                ->booleanNode('enabled')->defaultTrue()
+                    ->info('[agent driver] Build a single PDF report (verdict + summary + screenshots) and attach it to the ticket.')
+                ->end()
+                ->scalarNode('soffice_binary')->defaultValue('soffice')
+                    ->info('[agent driver] LibreOffice binary used to render the HTML report to PDF.')
+                ->end()
+                ->integerNode('timeout')->defaultValue(120)->min(1)->end()
+            ->end()->end()
         ->end()->end();
     }
 

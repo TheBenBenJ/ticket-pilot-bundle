@@ -15,12 +15,14 @@ final readonly class AgentReviewResult
 {
     /**
      * @param list<string> $screenshots Absolute paths to the screenshots taken during the review
+     * @param string|null  $reportPdf   Absolute path to the consolidated PDF report (null when not generated)
      */
     public function __construct(
         public bool $passed,
         public string $summary,
         public array $screenshots = [],
         public string $rawOutput = '',
+        public ?string $reportPdf = null,
     ) {
     }
 }

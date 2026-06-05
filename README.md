@@ -288,8 +288,11 @@ context** (ticket fields and the merge/pull request description), your **trusted
 (a project file: how to log in, navigate, find test data, what counts as an error), the **login
 credentials**, and drives a **real browser through its own tools** (e.g. a [Playwright MCP][mcp]
 server) — exploring the app like a tester, taking screenshots, and returning a verdict
-(`REVIEW PASSED` / `REVIEW FAILED`) plus a summary. Screenshots are uploaded to the ticket
-(Jira attachments).
+(`REVIEW PASSED` / `REVIEW FAILED`) plus a summary. Only the screenshots the agent names in
+its summary are reported, and a single **PDF report** (verdict + summary + those screenshots) is
+built and attached to the ticket (on Jira, as an attachment; on GitHub, listed by name). The PDF
+is rendered from HTML with headless LibreOffice (`soffice`), so set `review.report.enabled: false`
+if LibreOffice is not available — the individual screenshots are still attached.
 
 ```yaml
 # config/packages/ticket_pilot.yaml
@@ -306,6 +309,10 @@ ticket_pilot:
         # screenshot_dir: 'var/ticket-pilot/screenshots'
         # summary_start_marker: '<<<REVIEW_SUMMARY'
         # summary_end_marker: 'REVIEW_SUMMARY>>>'
+        # report:
+        #     enabled: true            # build a PDF report and attach it to the ticket
+        #     soffice_binary: 'soffice'
+        #     timeout: 120
 ```
 
 ```bash

@@ -5,6 +5,20 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.3] - 2026-06-05
+
+### Added
+- **Agent review — PDF report on the ticket**: the agent review now builds a single PDF
+  (verdict + summary + the screenshots, embedded inline) and attaches it to the ticket, so the
+  review is one readable deliverable instead of a pile of loose images. Rendered from HTML via
+  headless LibreOffice (the `soffice` binary already used for attachment conversion, so no new
+  dependency). New `review.report` config (`enabled`, `soffice_binary`, `timeout`) and
+  `ReviewReportRenderer`; `AgentReviewResult` carries the report path. On Jira the PDF is
+  uploaded as an attachment; on GitHub it is listed by name (no upload endpoint). The report is
+  best-effort: a missing/failing `soffice` is logged and never fails the review.
+- **Agent review — screenshot curation**: only the screenshots the agent names in its summary are
+  reported (falling back to all when it names none), so the ticket gets the meaningful shots.
+
 ## [0.5.2] - 2026-06-05
 
 ### Added

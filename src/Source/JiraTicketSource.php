@@ -119,7 +119,11 @@ final class JiraTicketSource implements TicketSourceInterface, TicketReporterInt
 
     public function reportAgentReview(Ticket $ticket, AgentReviewResult $result): void
     {
-        // Upload the screenshots first so the comment can reference them as attachments.
+        // Upload the consolidated PDF report first, then the screenshots, so the
+        // comment can reference them as attachments.
+        if (null !== $result->reportPdf) {
+            $this->uploadAttachment($ticket->key, $result->reportPdf);
+        }
         foreach ($result->screenshots as $screenshot) {
             $this->uploadAttachment($ticket->key, $screenshot);
         }

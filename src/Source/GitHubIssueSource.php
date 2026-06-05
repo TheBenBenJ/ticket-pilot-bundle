@@ -132,8 +132,12 @@ final class GitHubIssueSource implements TicketSourceInterface, TicketReporterIn
         // The GitHub issues API has no file-upload endpoint, so screenshots are
         // referenced by name in the comment (they live in the CI artifacts/logs).
         $header = \sprintf('🤖 **Agent review %s** — `%s`', $result->passed ? '✅ PASSED' : '❌ FAILED', $ticket->key);
-        $screenshots = [] !== $result->screenshots
-            ? "\n\nScreenshots: ".implode(', ', array_map('basename', $result->screenshots))
+        $artifacts = array_merge(
+            null !== $result->reportPdf ? [$result->reportPdf] : [],
+            $result->screenshots,
+        );
+        $screenshots = [] !== $artifacts
+            ? "\n\nArtifacts: ".implode(', ', array_map('basename', $artifacts))
             : '';
 
         $this->postComment($ticket->key, $header."\n\n".$result->summary.$screenshots);

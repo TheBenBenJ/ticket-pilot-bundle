@@ -41,6 +41,7 @@ use TheBenBenJ\TicketPilotBundle\Review\ChromeRecipeRunner;
 use TheBenBenJ\TicketPilotBundle\Review\RecipeExecutor;
 use TheBenBenJ\TicketPilotBundle\Review\RecipeFactory;
 use TheBenBenJ\TicketPilotBundle\Review\RecipeRepository;
+use TheBenBenJ\TicketPilotBundle\Review\ReviewReportRenderer;
 use TheBenBenJ\TicketPilotBundle\Review\ReviewUrlResolver;
 use TheBenBenJ\TicketPilotBundle\Security\TicketGuard;
 use TheBenBenJ\TicketPilotBundle\Service\AutoDevOptions;
@@ -183,6 +184,17 @@ final class TicketPilotExtension extends Extension
             ? new Reference(MergeRequestReaderInterface::class, ContainerBuilder::NULL_ON_INVALID_REFERENCE)
             : null;
 
+        $reportRenderer = null;
+        if ($review['report']['enabled']) {
+            $container->setDefinition(ReviewReportRenderer::class, new Definition(ReviewReportRenderer::class, [
+                $screenshotDir,
+                $review['report']['soffice_binary'],
+                $review['report']['timeout'],
+                new Reference(LoggerInterface::class, ContainerBuilder::NULL_ON_INVALID_REFERENCE),
+            ]));
+            $reportRenderer = new Reference(ReviewReportRenderer::class);
+        }
+
         $container->setDefinition(AgentReviewRunner::class, new Definition(AgentReviewRunner::class, [
             new Reference(AgentRegistry::class),
             new Reference(AgentReviewPromptBuilder::class),
@@ -193,6 +205,7 @@ final class TicketPilotExtension extends Extension
             $review['summary_start_marker'],
             $review['summary_end_marker'],
             $mergeRequestReader,
+            $reportRenderer,
         ]));
 
         $this->registerCommand($container, ReviewCommand::class, [

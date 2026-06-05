@@ -49,4 +49,19 @@ final class AgentReviewRunnerTest extends TestCase
         self::assertFalse($runner->verdict('the agent rambled without a verdict'));
         self::assertFalse($runner->verdict(''));
     }
+
+    public function testSelectReportedKeepsOnlyTheShotsNamedInTheSummary(): void
+    {
+        $shots = ['/tmp/a.png', '/tmp/b.png', '/tmp/c.png'];
+        $summary = "REVIEW PASSED\nSee b.png for the planning screen.";
+
+        self::assertSame(['/tmp/b.png'], $this->runner()->selectReported($shots, $summary));
+    }
+
+    public function testSelectReportedFallsBackToAllWhenNoneAreNamed(): void
+    {
+        $shots = ['/tmp/a.png', '/tmp/b.png'];
+
+        self::assertSame($shots, $this->runner()->selectReported($shots, 'REVIEW PASSED, no shot mentioned'));
+    }
 }
