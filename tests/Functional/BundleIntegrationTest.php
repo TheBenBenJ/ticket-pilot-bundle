@@ -8,6 +8,7 @@ use PHPUnit\Framework\TestCase;
 use Symfony\Bundle\FrameworkBundle\Console\Application;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use TheBenBenJ\TicketPilotBundle\Contract\PromptBuilderInterface;
+use TheBenBenJ\TicketPilotBundle\Contract\RecipeRunnerInterface;
 use TheBenBenJ\TicketPilotBundle\Contract\VcsProviderInterface;
 use TheBenBenJ\TicketPilotBundle\Controller\TriggerPipelineController;
 use TheBenBenJ\TicketPilotBundle\Registry\AgentRegistry;
@@ -120,6 +121,21 @@ final class BundleIntegrationTest extends TestCase
         ]);
 
         self::assertTrue((new Application($kernel))->has('ia:review'));
+    }
+
+    public function testNoSandboxOptionReachesTheBrowserFactory(): void
+    {
+        $kernel = $this->boot([
+            'sources' => ['github' => ['enabled' => true, 'token' => 'secret', 'repository' => 'acme/app']],
+            'review' => ['enabled' => true, 'no_sandbox' => true],
+        ]);
+
+        $container = $kernel->getContainer()->get('test.service_container');
+        self::assertInstanceOf(ContainerInterface::class, $container);
+
+        $runner = $container->get(RecipeRunnerInterface::class);
+        $options = (new \ReflectionProperty($runner, 'browserOptions'))->getValue($runner);
+        self::assertSame(['headless' => true, 'noSandbox' => true], $options);
     }
 
     /**

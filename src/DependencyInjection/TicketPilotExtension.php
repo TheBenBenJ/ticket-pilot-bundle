@@ -125,10 +125,14 @@ final class TicketPilotExtension extends Extension
             $base.'/'.ltrim($review['screenshot_dir'], '/'),
             $review['wait_timeout'],
         ]));
+        $browserOptions = ['headless' => true];
+        if ($review['no_sandbox']) {
+            $browserOptions['noSandbox'] = true;
+        }
         $container->setDefinition(ChromeRecipeRunner::class, new Definition(ChromeRecipeRunner::class, [
             new Reference(RecipeExecutor::class),
             $review['chrome_binary'],
-            ['headless' => true],
+            $browserOptions,
         ]));
         $container->setAlias(RecipeRunnerInterface::class, ChromeRecipeRunner::class);
         $container->setDefinition(ReviewUrlResolver::class, new Definition(ReviewUrlResolver::class, [$review['url_pattern']]));

@@ -5,6 +5,14 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.1] - 2026-06-05
+
+### Added
+- **`review.no_sandbox` option**: launches headless Chrome with `--no-sandbox`, required
+  when running as root or inside most Docker images (where Chrome's SUID sandbox is not
+  configured and Chrome otherwise aborts at startup). Wired into the `BrowserFactory`
+  options of `ChromeRecipeRunner`. Defaults to `false`.
+
 ## [0.4.0] - 2026-06-05
 
 ### Added

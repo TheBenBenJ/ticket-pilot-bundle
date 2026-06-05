@@ -304,10 +304,13 @@ ticket_pilot:
         url_pattern: 'https://{branch_slug}.review.example.com'   # or pass --url
         # recipes_dir: '.ticket-pilot/recipes'
         # chrome_binary: '/usr/bin/chromium'   # empty = auto-detect
+        # no_sandbox: true                     # required as root / in most Docker images
         # screenshot_dir: 'var/ticket-pilot/screenshots'
 ```
 
 > Requires `composer require chrome-php/chrome` and a Chromium/Chrome binary in the runtime.
+> Running as root or inside a container usually needs `no_sandbox: true` (Chrome's SUID
+> sandbox is not configured there) — otherwise Chrome aborts at startup.
 > The step logic is engine-agnostic (`RecipeRunnerInterface` / `BrowserPageInterface`), so you
 > can plug in another browser engine.
 
