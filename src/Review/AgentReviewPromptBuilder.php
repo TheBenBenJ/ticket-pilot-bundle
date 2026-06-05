@@ -54,6 +54,7 @@ final class AgentReviewPromptBuilder
             $baseUrl,
         );
 
+        $parts[] = $this->scope();
         $parts[] = $this->businessContext($ticket, $mergeRequestDescription);
         $parts[] = $this->credentials($login, $password);
         $parts[] = $this->projectRules();
@@ -89,6 +90,27 @@ final class AgentReviewPromptBuilder
             - Do NOT expose a plan for validation, do NOT ask for confirmation.
             - No meta-commentary ("Great!", "Let me…"). Be factual and direct.
             - Perform NO write operation against the application data or the server (read-only).
+            PROMPT;
+    }
+
+    /**
+     * Keeps the review focused on the change under test instead of touring the
+     * whole application (which wastes time and produces irrelevant screenshots).
+     */
+    private function scope(): string
+    {
+        return <<<PROMPT
+            ## Scope & focus
+            Stay strictly on what THIS ticket and its merge request describe — you are reviewing
+            one change, not auditing the whole application.
+            - Reproduce the exact functional scenario of the ticket (and the bug case itself if it
+              is a defect/anomaly).
+            - Verify the screen(s) DIRECTLY impacted by the change; add at most a light, targeted
+              regression check on the screens immediately linked to it.
+            - Do NOT tour unrelated areas nor screenshot screens that have nothing to do with the
+              ticket. Be efficient: a handful of screenshots of the impacted screens is enough.
+            - If you cannot locate the impacted screen from the ticket / merge request / menus,
+              state it in the verdict instead of wandering across the app.
             PROMPT;
     }
 

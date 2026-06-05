@@ -66,6 +66,15 @@ final class AgentReviewPromptBuilderTest extends TestCase
         self::assertStringContainsString('No credentials provided', $prompt);
     }
 
+    public function testPromptKeepsReviewFocusedOnTheChange(): void
+    {
+        $prompt = (new AgentReviewPromptBuilder())->build(new Ticket('LYSI-6', 't', 'd', 'Task', 'jira'), 'https://app.test');
+
+        self::assertStringContainsString('Scope & focus', $prompt);
+        self::assertStringContainsString('not auditing the whole application', $prompt);
+        self::assertStringContainsString('DIRECTLY impacted', $prompt);
+    }
+
     public function testPromptCarriesShellSafetyGuardrail(): void
     {
         $prompt = (new AgentReviewPromptBuilder())->build(new Ticket('LYSI-5', 't', 'd', 'Task', 'jira'), 'https://app.test');
