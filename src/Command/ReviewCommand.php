@@ -142,7 +142,18 @@ final class ReviewCommand extends Command
             ? RunRecord::STATUS_PASSED
             : (str_contains(mb_strtoupper($result->summary), AgentReviewPromptBuilder::INCONCLUSIVE_TOKEN) ? RunRecord::STATUS_INCONCLUSIVE : RunRecord::STATUS_FAILED);
         $agentName = $input->getOption('agent');
-        $this->record(RunRecord::create(RunRecord::TYPE_REVIEW, $ticket->key, $status, $branch, $result->summary, $url, \is_string($agentName) ? $agentName : '', (string) $input->getOption('source')));
+        $this->record(RunRecord::create(
+            RunRecord::TYPE_REVIEW,
+            $ticket->key,
+            $status,
+            $branch,
+            $result->summary,
+            $url,
+            \is_string($agentName) ? $agentName : '',
+            (string) $input->getOption('source'),
+            0.0,
+            array_values(array_map('basename', $result->screenshots)),
+        ));
 
         return $this->verdict($io, $ticket, $result->passed);
     }
@@ -191,6 +202,8 @@ final class ReviewCommand extends Command
             $url,
             '',
             (string) $input->getOption('source'),
+            0.0,
+            array_values(array_map('basename', $result->screenshots)),
         ));
 
         return $this->verdict($io, $ticket, $result->passed);

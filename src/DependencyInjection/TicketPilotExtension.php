@@ -33,6 +33,8 @@ use TheBenBenJ\TicketPilotBundle\Contract\VcsProviderInterface;
 use TheBenBenJ\TicketPilotBundle\Controller\DashboardController;
 use TheBenBenJ\TicketPilotBundle\Controller\DashboardLaunchController;
 use TheBenBenJ\TicketPilotBundle\Controller\DashboardRenderer;
+use TheBenBenJ\TicketPilotBundle\Controller\DashboardTicketController;
+use TheBenBenJ\TicketPilotBundle\Controller\RunIngestController;
 use TheBenBenJ\TicketPilotBundle\Controller\TriggerPipelineController;
 use TheBenBenJ\TicketPilotBundle\Git\GitClient;
 use TheBenBenJ\TicketPilotBundle\Git\GitInterface;
@@ -49,6 +51,7 @@ use TheBenBenJ\TicketPilotBundle\Review\RecipeFactory;
 use TheBenBenJ\TicketPilotBundle\Review\RecipeRepository;
 use TheBenBenJ\TicketPilotBundle\Review\ReviewReportRenderer;
 use TheBenBenJ\TicketPilotBundle\Review\ReviewUrlResolver;
+use TheBenBenJ\TicketPilotBundle\Run\HttpRunStore;
 use TheBenBenJ\TicketPilotBundle\Run\JsonlRunStore;
 use TheBenBenJ\TicketPilotBundle\Run\RunStoreInterface;
 use TheBenBenJ\TicketPilotBundle\Security\TicketGuard;
@@ -100,10 +103,40 @@ final class TicketPilotExtension extends Extension
         $isAbsolute = '' !== $path && ('/' === $path[0] || 1 === preg_match('#^[A-Za-z]:[\\\\/]#', $path));
         $resolved = $isAbsolute ? $path : rtrim($projectDir, '/').'/'.ltrim($path, '/');
 
+        // The canonical store is always the local JSONL file (the env that serves
+        // the dashboard owns it). The dashboard, the CLI and the ingest endpoint
+        // always read/write THIS file.
         $container->setDefinition(JsonlRunStore::class, new Definition(JsonlRunStore::class, [$resolved]));
-        $container->setAlias(RunStoreInterface::class, JsonlRunStore::class)->setPublic(true);
 
-        $this->registerCommand($container, RunsCommand::class, [new Reference(RunStoreInterface::class)]);
+        // What the runner commands WRITE through: a remote HTTP store when
+        // tracking.remote_url is set (throw-away CI containers forward their runs
+        // to the dashboard env), the local file otherwise.
+        $remoteUrl = (string) $config['tracking']['remote_url'];
+        $ingestToken = (string) $config['tracking']['ingest_token'];
+        if ('' !== $remoteUrl) {
+            $container->setDefinition(HttpRunStore::class, new Definition(HttpRunStore::class, [
+                new Reference(HttpClientInterface::class),
+                $remoteUrl,
+                $ingestToken,
+                new Reference(LoggerInterface::class, ContainerBuilder::NULL_ON_INVALID_REFERENCE),
+            ]));
+            $container->setAlias(RunStoreInterface::class, HttpRunStore::class)->setPublic(true);
+        } else {
+            $container->setAlias(RunStoreInterface::class, JsonlRunStore::class)->setPublic(true);
+        }
+
+        // ia:runs lists the canonical file.
+        $this->registerCommand($container, RunsCommand::class, [new Reference(JsonlRunStore::class)]);
+
+        // Ingest endpoint: remote pipelines POST their runs here; appended to the
+        // canonical local file. The route is opt-in (bundle routes import).
+        $ingest = new Definition(RunIngestController::class, [
+            new Reference(JsonlRunStore::class),
+            $ingestToken,
+        ]);
+        $ingest->addTag('controller.service_arguments');
+        $ingest->setPublic(true);
+        $container->setDefinition(RunIngestController::class, $ingest);
 
         if (!$config['tracking']['dashboard']) {
             return;
@@ -112,7 +145,7 @@ final class TicketPilotExtension extends Extension
         $container->setDefinition(DashboardRenderer::class, new Definition(DashboardRenderer::class));
 
         $dashboard = new Definition(DashboardController::class, [
-            new Reference(RunStoreInterface::class),
+            new Reference(JsonlRunStore::class),
             new Reference(DashboardRenderer::class),
             new Reference('router'),
             new Reference(TicketSourceRegistry::class),
@@ -136,6 +169,15 @@ final class TicketPilotExtension extends Extension
         $launch->addTag('controller.service_arguments');
         $launch->setPublic(true);
         $container->setDefinition(DashboardLaunchController::class, $launch);
+
+        $detail = new Definition(DashboardTicketController::class, [
+            new Reference(JsonlRunStore::class),
+            new Reference(DashboardRenderer::class),
+            new Reference('router'),
+        ]);
+        $detail->addTag('controller.service_arguments');
+        $detail->setPublic(true);
+        $container->setDefinition(DashboardTicketController::class, $detail);
     }
 
     /**

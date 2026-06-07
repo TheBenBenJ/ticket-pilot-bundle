@@ -21,6 +21,9 @@ final readonly class RunRecord
     public const STATUS_PASSED = 'passed';
     public const STATUS_INCONCLUSIVE = 'inconclusive';
 
+    /**
+     * @param list<string> $screenshots Names (or URLs) of screenshots produced by a review
+     */
     public function __construct(
         public string $id,
         public string $type,
@@ -33,11 +36,14 @@ final readonly class RunRecord
         public string $agent = '',
         public string $source = '',
         public float $duration = 0.0,
+        public array $screenshots = [],
     ) {
     }
 
     /**
      * Builds a record, generating the id and the timestamp.
+     *
+     * @param list<string> $screenshots
      */
     public static function create(
         string $type,
@@ -49,6 +55,7 @@ final readonly class RunRecord
         string $agent = '',
         string $source = '',
         float $duration = 0.0,
+        array $screenshots = [],
     ): self {
         return new self(
             bin2hex(random_bytes(6)),
@@ -62,6 +69,7 @@ final readonly class RunRecord
             $agent,
             $source,
             $duration,
+            $screenshots,
         );
     }
 
@@ -82,6 +90,7 @@ final readonly class RunRecord
             'agent' => $this->agent,
             'source' => $this->source,
             'duration' => $this->duration,
+            'screenshots' => $this->screenshots,
         ];
     }
 
@@ -102,6 +111,7 @@ final readonly class RunRecord
             (string) ($data['agent'] ?? ''),
             (string) ($data['source'] ?? ''),
             (float) ($data['duration'] ?? 0.0),
+            array_values(array_filter(array_map('strval', (array) ($data['screenshots'] ?? [])), static fn (string $s): bool => '' !== $s)),
         );
     }
 }

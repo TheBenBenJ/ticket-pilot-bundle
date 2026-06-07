@@ -33,6 +33,8 @@ final class DashboardController
     public function __invoke(): Response
     {
         $launchUrl = $this->urls->generate('ticket_pilot_dashboard_launch');
+        // Built once with a placeholder; the renderer substitutes each ticket key.
+        $detailUrlTemplate = $this->urls->generate('ticket_pilot_dashboard_ticket', ['ticket' => '__TICKET__']);
 
         $html = $this->renderer->page(
             $this->store->recent(100),
@@ -42,6 +44,7 @@ final class DashboardController
             $this->agents->names(),
             $this->defaultSource,
             $this->defaultAgent,
+            $detailUrlTemplate,
         );
 
         return new Response($html);

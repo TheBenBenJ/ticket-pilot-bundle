@@ -5,6 +5,8 @@ declare(strict_types=1);
 use Symfony\Component\Routing\Loader\Configurator\RoutingConfigurator;
 use TheBenBenJ\TicketPilotBundle\Controller\DashboardController;
 use TheBenBenJ\TicketPilotBundle\Controller\DashboardLaunchController;
+use TheBenBenJ\TicketPilotBundle\Controller\DashboardTicketController;
+use TheBenBenJ\TicketPilotBundle\Controller\RunIngestController;
 use TheBenBenJ\TicketPilotBundle\Controller\TriggerPipelineController;
 
 /*
@@ -30,4 +32,13 @@ return static function (RoutingConfigurator $routes): void {
     $routes->add('ticket_pilot_dashboard_launch', '/ia/dashboard/launch')
         ->controller(DashboardLaunchController::class)
         ->methods(['POST']);
+
+    $routes->add('ticket_pilot_runs_ingest', '/ia/runs')
+        ->controller(RunIngestController::class)
+        ->methods(['POST']);
+
+    // Per-ticket detail timeline. Declared last so the fixed dashboard paths win.
+    $routes->add('ticket_pilot_dashboard_ticket', '/ia/dashboard/{ticket}')
+        ->controller(DashboardTicketController::class)
+        ->methods(['GET']);
 };

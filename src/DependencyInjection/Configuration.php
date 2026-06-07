@@ -53,10 +53,16 @@ final class Configuration implements ConfigurationInterface
     {
         $root->children()->arrayNode('tracking')->canBeEnabled()->children()
             ->scalarNode('path')->defaultValue('var/ticket-pilot/runs.jsonl')
-                ->info('JSONL file recording every run. Relative paths are resolved from the project dir; point it at a persistent/shared location (volume) when runs happen in throw-away CI containers.')
+                ->info('Canonical JSONL file (on the env that serves the dashboard). Relative paths are resolved from the project dir.')
             ->end()
             ->booleanNode('dashboard')->defaultTrue()
                 ->info('Register the HTTP dashboard controller (the route is still imported manually). Lists the runs and can launch new ones when a VCS provider exposing pipelines is enabled.')
+            ->end()
+            ->scalarNode('remote_url')->defaultValue('')
+                ->info('When set, runs are POSTed to this ingest URL (e.g. https://host/ia/runs) instead of written locally. Set it in throw-away CI containers so their runs land on the env that owns the canonical file; leave empty on that env.')
+            ->end()
+            ->scalarNode('ingest_token')->defaultValue('')
+                ->info('Shared secret guarding the ingest endpoint (POST /ia/runs). The same value must be set on the dashboard env (to verify) and in CI (to send). Empty disables ingestion (endpoint returns 401).')
             ->end()
         ->end()->end();
     }

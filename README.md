@@ -229,19 +229,24 @@ JSONL file, then list them with `ia:runs` or browse the bundled HTML dashboard.
 ticket_pilot:
     tracking:
         enabled: true
-        # Relative paths resolve from the project dir. Point it at a persistent/shared
-        # location (volume) when your runs happen in throw-away CI containers.
-        path: 'var/ticket-pilot/runs.jsonl'
-        dashboard: true   # register the /ia/dashboard controller (route still imported below)
+        path: 'var/ticket-pilot/runs.jsonl'   # canonical file on the env that serves the dashboard
+        dashboard: true                        # register the /ia/dashboard controller (route imported below)
+        # Centralise runs from throw-away CI containers: set these IN CI only, so each run is
+        # POSTed to the dashboard env instead of written to the (ephemeral) CI filesystem.
+        remote_url: '%env(default::IA_RUNS_REMOTE_URL)%'   # e.g. https://your-host/ia/runs ; empty on the dashboard env
+        ingest_token: '%env(default::IA_RUNS_TOKEN)%'      # shared secret, set on both the dashboard env and in CI
 ```
 
-The dashboard lives at `GET /ia/dashboard` (same opt-in route import as the trigger). It
-lists the recent runs and, when a VCS provider exposing pipelines is enabled, offers forms
-to **launch** auto-dev / iterate / review — each triggers a CI pipeline carrying the `IA_*`
-variables (including `IA_MODE=auto-dev|iterate|review`) so your CI routes to the right job.
+- `GET /ia/dashboard` — lists the recent runs and, when a pipeline-capable VCS provider is
+  enabled, offers forms to **launch** auto-dev / iterate / review (each triggers a CI pipeline
+  carrying the `IA_*` variables, incl. `IA_MODE`). Ticket keys link to…
+- `GET /ia/dashboard/{ticket}` — the **per-ticket timeline**: every step (dev → iterate →
+  review) with the full agent summary and the review screenshots.
+- `POST /ia/runs` — ingest endpoint (token-guarded) that CI containers POST their runs to when
+  `remote_url` is set, so the dashboard env keeps the single canonical file.
 
-> Protect `/ia/dashboard` behind your firewall — its launch forms start pipelines. The store
-> is pluggable: alias `RunStoreInterface` to your own implementation (database, …) if needed.
+> Protect these routes behind your firewall — the launch forms start pipelines. The store is
+> pluggable: alias `RunStoreInterface` to your own implementation (database, …) if needed.
 
 ## Running it unattended (server / CI / cron)
 

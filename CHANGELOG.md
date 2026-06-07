@@ -5,6 +5,24 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.0] - 2026-06-07
+
+### Added
+- **Centralised run store via HTTP ingest**: the environment that serves the dashboard owns a
+  single canonical JSONL file; throw-away CI containers forward their runs to it instead of
+  writing locally.
+  - `tracking.remote_url` — when set, runs are POSTed to the ingest endpoint (`HttpRunStore`)
+    rather than written locally. Set it in CI, leave it empty on the dashboard env.
+  - `tracking.ingest_token` — shared secret guarding `POST /ia/runs` (`RunIngestController`,
+    constant-time check; empty token rejects all ingestion). Sent by `HttpRunStore`, verified
+    by the endpoint.
+  - The dashboard, `ia:runs` and the ingest endpoint always read/write the canonical local file.
+- **Per-ticket detail timeline** (`GET /ia/dashboard/{ticket}`): every step recorded for a
+  ticket (dev → iterate → review) in chronological order, with the full agent summary, the
+  branch/agent/duration and the review screenshots. Ticket keys in the dashboard list link to it.
+- `RunRecord` gained a `screenshots` field; reviews record their screenshot names (shown in the
+  timeline — rendered as images when they are URLs, listed by name otherwise).
+
 ## [0.6.1] - 2026-06-07
 
 ### Added
