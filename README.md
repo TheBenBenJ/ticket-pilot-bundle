@@ -60,9 +60,13 @@ return [
 
 ## Configuration
 
-Create `config/packages/ticket_pilot.yaml`. Sources, the VCS provider and the
-quality gate are **opt-in**; agents are on by default. Use environment variables
-for every secret.
+> **Quickest start:** `php bin/console ia:install` generates
+> `config/packages/ticket_pilot.yaml` interactively (source, VCS, agent, review,
+> tracking, …) and prints the env vars to set. Use `--force` to overwrite.
+
+Or write `config/packages/ticket_pilot.yaml` by hand. Sources, the VCS provider and
+the quality gate are **opt-in**; agents are on by default. Use environment variables
+for every secret. Every option is listed in the [Configuration reference](#configuration-reference) below.
 
 ```yaml
 ticket_pilot:
@@ -151,11 +155,127 @@ ticket_pilot:
         trusted_reporters: ['alice@example.com', 'bob@example.com']
 ```
 
-Full reference:
+Full machine reference:
 
 ```bash
 php bin/console config:dump-reference ticket_pilot
 ```
+
+## Configuration reference
+
+Every option, grouped by section. **Req** = required when its section is enabled.
+Secrets should be `%env(...)%` placeholders, never literals.
+
+### Root
+
+| Option | Type | Default | Description |
+|---|---|---|---|
+| `default_source` | string | `jira` | Source used when `--source` is omitted. |
+| `default_agent` | string | `cursor` | Agent used when `--agent` is omitted. |
+| `project_dir` | string | `%kernel.project_dir%` | Working dir git, the agent and the quality gate operate in. |
+| `agent_timeout` | int (s) | `3600` | Max wall-clock for one agent run. |
+| `git_timeout` | int (s) | `120` | Timeout per git command (fetch/pull/push/…). |
+| `cleanup_branch_on_failure` | bool | `true` | Delete the ticket branch (local + remote if pushed) when a run fails. |
+
+### `sources` (opt-in, one or more)
+
+**`sources.jira`** — `enabled` (bool, `false`) · `base_uri`*, `email`*, `token`* (Req) · `project`* (Req, project key) · `pending_label` (`IA`) · `pending_status` (`To Do`). JQL pending = `labels = <pending_label> AND status = "<pending_status>"`.
+
+**`sources.sentry`** — `enabled` (bool) · `base_uri` (`https://sentry.io`) · `token`*, `organization`*, `project`* (Req).
+
+**`sources.github`** (issues) — `enabled` (bool) · `base_uri` (`https://api.github.com`, use `.../api/v3` for Enterprise) · `token`*, `repository`* (`owner/repo`, Req) · `pending_label` (`ia`) · `bug_label` (`bug`, → hotfix flow).
+
+### `vcs` (enable EXACTLY one)
+
+**`vcs.gitlab`** — `enabled` (bool) · `base_uri`*, `token`*, `project_path`* (`group/project`, Req) · `pipeline_ref` (`main`, branch the HTTP trigger starts a pipeline on).
+
+**`vcs.github`** — `enabled` (bool) · `base_uri` (`https://api.github.com`) · `token`*, `repository`* (Req) · `dispatch_event_type` (`ticket-pilot`, the `repository_dispatch` type) · `pipeline_ref` (`main`).
+
+### `agents` (on by default)
+
+| Option | Type | Default | Description |
+|---|---|---|---|
+| `agents.cursor.enabled` | bool | `true` | Cursor CLI agent. |
+| `agents.cursor.binary` | string | `agent` | Cursor binary name/path. |
+| `agents.claude.enabled` | bool | `true` | Claude Code agent. |
+| `agents.claude.binary` | string | `claude` | Claude binary name/path. |
+| `agents.claude.skip_permissions` | bool | `true` | Pass `--dangerously-skip-permissions`. |
+
+### `prompt`
+
+| Option | Type | Default | Description |
+|---|---|---|---|
+| `prompt.language` | string | `English` | Language for the agent's code, tests and output. |
+| `prompt.quality_commands` | list | `['make check','make test']` | Commands the agent is told to run before finishing (display only). |
+| `prompt.extra_instructions` | string | `''` | Trusted guidelines appended to every prompt. |
+| `prompt.convention_files` | list (globs) | `[]` | Files read at run time and injected as trusted rules (e.g. `CLAUDE.md`, `.cursor/rules/*.md`). |
+| `prompt.summary_start_marker` / `summary_end_marker` | string | `<<<MR_SUMMARY` / `MR_SUMMARY>>>` | Delimit the MR-description block the agent emits. |
+
+### `branching`
+
+| Option | Type | Default | Description |
+|---|---|---|---|
+| `branching.feature_base` | string | `develop` | Base branch for features. |
+| `branching.hotfix_base` | string | `main` | Base branch for hotfixes (bug types). |
+| `branching.feature_prefix` / `hotfix_prefix` | string | `feature` / `hotfix` | Branch name prefixes. |
+| `branching.release_branch_pattern` | string | `release/RC-{version}` | `{version}` = ticket fix version. |
+| `branching.bug_types` | list | `['bug','anomalie','defect']` | Lower-cased ticket types routed to the hotfix flow. |
+
+### `merge_request`
+
+| Option | Type | Default | Description |
+|---|---|---|---|
+| `merge_request.commit_message_template` | string | `[{key}] {title}` | Supports `{key}` and `{title}`. |
+| `merge_request.draft` | bool | `false` | Open every MR/PR as a draft. |
+
+### `quality` (opt-in)
+
+| Option | Type | Default | Description |
+|---|---|---|---|
+| `quality.enabled` | bool | `false` | Run checks after the agent, before push. |
+| `quality.on_failure` | enum | `abort` | `abort` (no push/MR) or `draft` (push + draft MR flagged with the errors). |
+| `quality.timeout` | int (s) | `300` | Timeout per quality command. |
+| `quality.commands` | map label→argv | `{check:[make,check], test:[make,test]}` | Ordered checks to run. |
+
+### `review` (opt-in)
+
+| Option | Type | Default | Description |
+|---|---|---|---|
+| `review.enabled` | bool | `false` | Enable `ia:review`. |
+| `review.driver` | enum | `recipe` | `recipe` (replay a YAML recipe in headless Chromium) or `agent` (a coding agent drives a real browser via its MCP and returns a verdict). |
+| `review.url_pattern` | string | `''` | Base URL with `{ticket}`/`{key}`/`{branch}`/`{branch_slug}`; `--url` overrides. |
+| `review.screenshot_dir` | string | `var/ticket-pilot/screenshots` | Where screenshots are collected. |
+| **recipe driver** | | | `recipes_dir` (`.ticket-pilot/recipes`), `write_recipe` (`true`), `chrome_binary` (`''` = auto), `no_sandbox` (`false` — set `true` in Docker/root), `wait_timeout` (ms, `5000`). |
+| **agent driver** | | | `agent` (`''` = `default_agent`), `rules_file` (trusted review guidance), `login`/`password` (`%env%`), `merge_request_context` (`true`), `summary_start_marker`/`summary_end_marker` (`<<<REVIEW_SUMMARY`/`REVIEW_SUMMARY>>>`). |
+| `review.report.*` | | | `enabled` (`true`), `soffice_binary` (`soffice`), `timeout` (`120`) — PDF report (verdict+summary+screenshots) attached to the ticket. |
+
+### `tracking` (opt-in)
+
+| Option | Type | Default | Description |
+|---|---|---|---|
+| `tracking.enabled` | bool | `false` | Record runs (`ia:runs`) and expose the dashboard. |
+| `tracking.path` | string | `var/ticket-pilot/runs.jsonl` | Canonical JSONL file on the env that serves the dashboard. |
+| `tracking.dashboard` | bool | `true` | Register the `/ia/dashboard` controllers (route still imported manually). |
+| `tracking.remote_url` | string | `''` | Set **in CI only** → runs are POSTed to this ingest URL instead of written locally. |
+| `tracking.ingest_token` | string | `''` | Shared secret for `POST /ia/runs` (set on the dashboard env to verify and in CI to send; empty = ingestion disabled). |
+
+### `attachments` (opt-in)
+
+| Option | Type | Default | Description |
+|---|---|---|---|
+| `attachments.enabled` | bool | `false` | Download ticket attachments for the agent to read. |
+| `attachments.dir` | string | `var/ticket-pilot/attachments` | Per-ticket download dir. |
+| `attachments.convert_documents` | bool | `true` | Convert office docs (doc/docx/odt/rtf) to PDF. |
+| `attachments.soffice_binary` | string | `soffice` | LibreOffice binary for the conversion. |
+| `attachments.timeout` | int (s) | `120` | Conversion timeout. |
+
+### `security` & `commit` & `http`
+
+| Option | Type | Default | Description |
+|---|---|---|---|
+| `security.trusted_reporters` | list | `[]` | When non-empty, auto-pickup (no `--ticket`) only processes tickets whose reporter is listed (anti prompt-injection). |
+| `commit.exclude_paths` | list | `[]` | Paths the agent commit must never include (infra, secrets, the bundle config). |
+| `http.max_retries` | int | `3` | Retries for transient API failures (timeouts, 5xx, 429); `0` disables. |
 
 ## Usage
 

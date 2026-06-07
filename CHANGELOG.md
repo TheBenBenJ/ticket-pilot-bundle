@@ -5,6 +5,17 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.0] - 2026-06-07
+
+### Added
+- **Interactive installer** `ia:install`: asks the structural choices (source, VCS, agent,
+  language, branching, merge request, quality, review, tracking) and writes a clean, commented
+  `config/packages/ticket_pilot.yaml` (secrets as `%env(...)%`), then prints the env vars to
+  set. `--force` overwrites, `--path` targets another file. The generated config is round-trip
+  validated against the bundle's Configuration in the test suite.
+- **Configuration reference** in the README: every option, by section, with type, default and
+  whether it is required — no ambiguity.
+
 ## [0.7.3] - 2026-06-07
 
 ### Fixed

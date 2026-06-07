@@ -19,6 +19,7 @@ use TheBenBenJ\TicketPilotBundle\Attachment\AttachmentCollector;
 use TheBenBenJ\TicketPilotBundle\Attachment\DocumentConverter;
 use TheBenBenJ\TicketPilotBundle\Command\AutoDevCommand;
 use TheBenBenJ\TicketPilotBundle\Command\CreateMergeRequestCommand;
+use TheBenBenJ\TicketPilotBundle\Command\InstallCommand;
 use TheBenBenJ\TicketPilotBundle\Command\IterateCommand;
 use TheBenBenJ\TicketPilotBundle\Command\ListTicketsCommand;
 use TheBenBenJ\TicketPilotBundle\Command\ReviewCommand;
@@ -552,6 +553,9 @@ final class TicketPilotExtension extends Extension
      */
     private function registerOrchestration(ContainerBuilder $container, array $config, string $projectDir, bool $hasVcs): void
     {
+        // The installer only needs the project dir; available before anything is configured.
+        $this->registerCommand($container, InstallCommand::class, [$projectDir]);
+
         // Read-only commands work without a VCS provider.
         $this->registerCommand($container, ListTicketsCommand::class, [
             new Reference(TicketSourceRegistry::class),
