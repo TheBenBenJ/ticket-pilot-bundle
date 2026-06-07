@@ -258,6 +258,8 @@ Secrets should be `%env(...)%` placeholders, never literals.
 | `tracking.dashboard` | bool | `true` | Register the `/ia/dashboard` controllers (route still imported manually). |
 | `tracking.remote_url` | string | `''` | Set **in CI only** → runs are POSTed to this ingest URL instead of written locally. |
 | `tracking.ingest_token` | string | `''` | Shared secret for `POST /ia/runs` (set on the dashboard env to verify and in CI to send; empty = ingestion disabled). |
+| `tracking.screenshots_dir` | string | `%kernel.project_dir%/public/ticket-pilot/screenshots` | Where the dashboard env saves review screenshots received through the ingest (under `public/`, so they are web-served and shown inline in the timeline). |
+| `tracking.screenshots_base_url` | string | `/ticket-pilot/screenshots` | Public URL prefix the saved screenshots are served from. |
 
 ### `attachments` (opt-in)
 

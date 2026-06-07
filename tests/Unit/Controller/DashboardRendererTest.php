@@ -64,6 +64,15 @@ final class DashboardRendererTest extends TestCase
         self::assertStringContainsString('<img src="https://host/shots/a.png"', $html);
     }
 
+    public function testTicketTimelineRendersServedPathsAsImages(): void
+    {
+        $runs = [new RunRecord('1', 'review', 'PROJ-1', 'passed', '2026-01-01T10:00:00+00:00', '', 'ok', '', '', '', 0.0, ['/ticket-pilot/screenshots/abc/home.png'])];
+
+        $html = (new DashboardRenderer())->ticketTimeline('PROJ-1', $runs, '/back');
+
+        self::assertStringContainsString('<img src="/ticket-pilot/screenshots/abc/home.png"', $html);
+    }
+
     public function testPageEmbedsTheBrandLogoAndColors(): void
     {
         $html = (new DashboardRenderer())->page([], '/launch', false, [], [], 'jira', 'cursor');

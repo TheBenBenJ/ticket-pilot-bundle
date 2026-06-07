@@ -152,7 +152,7 @@ final class ReviewCommand extends Command
             \is_string($agentName) ? $agentName : '',
             (string) $input->getOption('source'),
             0.0,
-            array_values(array_map('basename', $result->screenshots)),
+            array_values($result->screenshots),
         ));
 
         return $this->verdict($io, $ticket, $result->passed);
@@ -203,7 +203,7 @@ final class ReviewCommand extends Command
             '',
             (string) $input->getOption('source'),
             0.0,
-            array_values(array_map('basename', $result->screenshots)),
+            array_values($result->screenshots),
         ));
 
         return $this->verdict($io, $ticket, $result->passed);

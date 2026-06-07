@@ -134,6 +134,8 @@ final class TicketPilotExtension extends Extension
         $ingest = new Definition(RunIngestController::class, [
             new Reference(JsonlRunStore::class),
             $ingestToken,
+            (string) $config['tracking']['screenshots_dir'],
+            (string) $config['tracking']['screenshots_base_url'],
         ]);
         $ingest->addTag('controller.service_arguments');
         $ingest->setPublic(true);

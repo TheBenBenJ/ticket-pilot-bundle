@@ -5,6 +5,16 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.0] - 2026-06-07
+
+### Added
+- **Review screenshots are viewable in the dashboard.** When forwarding a run to the ingest,
+  `HttpRunStore` attaches the review's screenshot files (base64 over JSON, no multipart/mime
+  dependency); `RunIngestController` saves them under a web-served dir (`tracking.screenshots_dir`,
+  default `public/ticket-pilot/screenshots`) and rewrites the record's `screenshots` to public
+  URLs (`tracking.screenshots_base_url`). The per-ticket timeline renders them as `<img>`
+  (URLs, served paths or data URIs); bare names still degrade to a list.
+
 ## [0.8.0] - 2026-06-07
 
 ### Added

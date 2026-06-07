@@ -169,17 +169,20 @@ final class DashboardRenderer
 
         $items = '';
         foreach ($screenshots as $shot) {
-            // A URL is shown as an image; a bare name (attached to the ticket) as text.
-            $items .= str_starts_with($shot, 'http')
+            // A URL/served path (or data URI) is shown as an image; a bare name as text.
+            $items .= $this->isViewable($shot)
                 ? \sprintf('<a href="%s" target="_blank" rel="noopener"><img src="%s" alt="" loading="lazy"></a>', $this->e($shot), $this->e($shot))
-                : \sprintf('<li>%s</li>', $this->e($shot));
+                : \sprintf('<li>%s</li>', $this->e(basename($shot)));
         }
 
-        $isImages = str_starts_with($screenshots[0], 'http');
-
-        return $isImages
+        return $this->isViewable($screenshots[0])
             ? '<div class="shots">'.$items.'</div>'
-            : '<details><summary>Screenshots (attached to the ticket)</summary><ul>'.$items.'</ul></details>';
+            : '<details open><summary>Screenshots (attached to the ticket)</summary><ul>'.$items.'</ul></details>';
+    }
+
+    private function isViewable(string $shot): bool
+    {
+        return str_starts_with($shot, 'http') || str_starts_with($shot, '/') || str_starts_with($shot, 'data:');
     }
 
     /**

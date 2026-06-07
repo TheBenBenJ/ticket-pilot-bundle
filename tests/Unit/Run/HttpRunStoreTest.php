@@ -47,6 +47,31 @@ final class HttpRunStoreTest extends TestCase
         $this->expectNotToPerformAssertions();
     }
 
+    public function testRecordAttachsLocalScreenshotsAsBase64Files(): void
+    {
+        $png = sys_get_temp_dir().'/tpb-shot-'.bin2hex(random_bytes(4)).'.png';
+        file_put_contents($png, 'PNGBYTES');
+
+        $body = '';
+        $client = new MockHttpClient(static function (string $m, string $u, array $options) use (&$body): MockResponse {
+            $body = (string) ($options['body'] ?? '');
+
+            return new MockResponse('', ['http_code' => 201]);
+        });
+
+        (new HttpRunStore($client, 'https://host/ia/runs', 't'))
+            ->record(new RunRecord('1', 'review', 'P-1', 'passed', '2026-01-01T10:00:00+00:00', '', '', '', '', '', 0.0, [$png]));
+
+        unlink($png);
+
+        // The screenshot file is base64-encoded into _files; the wire keeps base names
+        // in screenshots (the ingest rewrites them to public URLs).
+        self::assertStringContainsString('"_files"', $body);
+        self::assertStringContainsString(base64_encode('PNGBYTES'), $body);
+        self::assertStringContainsString('"name":"'.basename($png).'"', $body);
+        self::assertStringContainsString('"screenshots":["'.basename($png).'"]', $body);
+    }
+
     public function testRecentIsNotSupportedRemotely(): void
     {
         self::assertSame([], (new HttpRunStore(new MockHttpClient(), 'https://host/ia/runs', 't'))->recent());

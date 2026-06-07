@@ -64,6 +64,12 @@ final class Configuration implements ConfigurationInterface
             ->scalarNode('ingest_token')->defaultValue('')
                 ->info('Shared secret guarding the ingest endpoint (POST /ia/runs). The same value must be set on the dashboard env (to verify) and in CI (to send). Empty disables ingestion (endpoint returns 401).')
             ->end()
+            ->scalarNode('screenshots_dir')->defaultValue('%kernel.project_dir%/public/ticket-pilot/screenshots')
+                ->info('Where the dashboard env saves screenshots received through the ingest (must be web-served — under public/).')
+            ->end()
+            ->scalarNode('screenshots_base_url')->defaultValue('/ticket-pilot/screenshots')
+                ->info('Public URL prefix the saved screenshots are served from (matches screenshots_dir).')
+            ->end()
         ->end()->end();
     }
 

@@ -57,6 +57,32 @@ final class RunIngestControllerTest extends TestCase
 
         self::assertSame(400, $response->getStatusCode());
     }
+
+    public function testFilesAreSavedAndScreenshotsBecomeUrls(): void
+    {
+        $dir = sys_get_temp_dir().'/tpb-ingest-'.bin2hex(random_bytes(4));
+        $store = new CapturingStore();
+        $controller = new RunIngestController($store, 'secret', $dir, '/ticket-pilot/screenshots');
+
+        $payload = json_encode([
+            'id' => 'abc123',
+            'type' => 'review',
+            'ticketKey' => 'PROJ-1',
+            'status' => 'passed',
+            '_files' => [['name' => 'home.png', 'data' => base64_encode('PNGBYTES')]],
+        ]);
+        $response = $controller($this->request('secret', (string) $payload));
+
+        self::assertSame(201, $response->getStatusCode());
+        self::assertSame(['/ticket-pilot/screenshots/abc123/home.png'], $store->records[0]->screenshots);
+        self::assertFileExists($dir.'/abc123/home.png');
+        self::assertSame('PNGBYTES', file_get_contents($dir.'/abc123/home.png'));
+
+        // cleanup
+        unlink($dir.'/abc123/home.png');
+        @rmdir($dir.'/abc123');
+        @rmdir($dir);
+    }
 }
 
 final class CapturingStore implements RunStoreInterface
