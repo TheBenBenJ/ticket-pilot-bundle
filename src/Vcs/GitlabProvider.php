@@ -79,7 +79,8 @@ final class GitlabProvider implements VcsProviderInterface, PipelineTriggerInter
             )->toArray();
 
             return trim((string) ($data[0]['description'] ?? ''));
-        } catch (HttpExceptionInterface $e) {
+        } catch (\Throwable $e) {
+            // Best-effort context: a bad token / unresolved project id must never fail the review.
             $this->logger->warning(\sprintf('mergeRequestDescription(%s) failed: %s', $sourceBranch, $e->getMessage()));
 
             return '';
@@ -121,7 +122,8 @@ final class GitlabProvider implements VcsProviderInterface, PipelineTriggerInter
             }
 
             return $comments;
-        } catch (HttpExceptionInterface $e) {
+        } catch (\Throwable $e) {
+            // Best-effort: a bad token / unresolved project id must never fail the run.
             $this->logger->warning(\sprintf('mergeRequestComments(%s) failed: %s', $sourceBranch, $e->getMessage()));
 
             return [];
