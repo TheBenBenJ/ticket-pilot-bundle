@@ -64,6 +64,16 @@ final class DashboardRendererTest extends TestCase
         self::assertStringContainsString('<img src="https://host/shots/a.png"', $html);
     }
 
+    public function testPageEmbedsTheBrandLogoAndColors(): void
+    {
+        $html = (new DashboardRenderer())->page([], '/launch', false, [], [], 'jira', 'cursor');
+
+        // Inline brand logo (SVG) and the brand green accent.
+        self::assertStringContainsString('<svg', $html);
+        self::assertStringContainsString('aria-label="Ticket Pilot"', $html);
+        self::assertStringContainsString('#02ad72', $html);
+    }
+
     public function testListLinksTicketsToTheDetailPage(): void
     {
         $runs = [new RunRecord('1', 'auto-dev', 'PROJ-9', 'success', '2026-01-01T10:00:00+00:00')];

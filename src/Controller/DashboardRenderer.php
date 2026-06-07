@@ -13,12 +13,28 @@ use TheBenBenJ\TicketPilotBundle\Run\RunRecord;
 final class DashboardRenderer
 {
     private const STATUS_COLORS = [
-        RunRecord::STATUS_SUCCESS => '#1a7f37',
-        RunRecord::STATUS_PASSED => '#1a7f37',
+        RunRecord::STATUS_SUCCESS => '#02ad72',
+        RunRecord::STATUS_PASSED => '#02ad72',
         RunRecord::STATUS_FAILED => '#cf222e',
         RunRecord::STATUS_INCONCLUSIVE => '#9a6700',
         RunRecord::STATUS_SKIPPED => '#57606a',
     ];
+
+    private static ?string $logo = null;
+
+    /**
+     * The brand logo (inline SVG), read once from the bundle resource.
+     */
+    private function logo(): string
+    {
+        if (null === self::$logo) {
+            $file = __DIR__.'/../Resources/logo.svg';
+            $svg = is_file($file) ? file_get_contents($file) : false;
+            self::$logo = \is_string($svg) ? $svg : '';
+        }
+
+        return self::$logo;
+    }
 
     /**
      * @param list<RunRecord> $runs
@@ -32,8 +48,7 @@ final class DashboardRenderer
         $rows = '' === ($r = $this->rows($runs, $detailUrlTemplate)) ? '<tr><td colspan="7" class="muted">No run recorded yet.</td></tr>' : $r;
 
         return $this->layout(
-            '<h1>Ticket Pilot</h1>'
-            .'<section class="launch"><h2>Launch a run</h2>'.$forms.'</section>'
+            '<section class="launch"><h2>Launch a run</h2>'.$forms.'</section>'
             .'<section><h2>Recent runs</h2><table>'
             .'<thead><tr><th>Date</th><th>Type</th><th>Ticket</th><th>Status</th><th>Branch</th><th>Summary</th><th></th></tr></thead>'
             .'<tbody>'.$rows.'</tbody></table></section>'
@@ -47,7 +62,7 @@ final class DashboardRenderer
             : '';
 
         return $this->layout(\sprintf(
-            '<h1>Ticket Pilot</h1><p>%s%s</p><p><a href="%s">&larr; Back to the dashboard</a></p>',
+            '<p>%s%s</p><p><a href="%s">&larr; Back to the dashboard</a></p>',
             $this->e($message),
             $link,
             $this->e($backUrl),
@@ -225,30 +240,45 @@ final class DashboardRenderer
 
     private function layout(string $body): string
     {
+        $logo = $this->logo();
+
         return <<<HTML
             <!doctype html>
             <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
             <title>Ticket Pilot</title>
             <style>
-              :root{color-scheme:light dark}
-              body{font:14px/1.5 system-ui,sans-serif;margin:0;padding:24px;max-width:1100px;margin:auto}
-              h1{font-size:20px}h2{font-size:16px;margin-top:28px}h3{font-size:14px;margin:0 0 8px}
+              :root{
+                --navy:#011a36;--green:#02ad72;--green-bright:#01d689;
+                --bg:#fbfbfc;--surface:#ffffff;--border:#dbe2ea;--muted:#5b6675;
+              }
+              *{box-sizing:border-box}
+              body{font:14px/1.5 system-ui,-apple-system,Segoe UI,sans-serif;color:var(--navy);background:var(--bg);margin:0}
+              .wrap{max-width:1100px;margin:auto;padding:24px}
+              .brand{display:flex;align-items:center;gap:12px;background:var(--surface);border-bottom:3px solid var(--green);padding:14px 24px}
+              .brand svg{height:46px;width:auto;display:block}
+              .brand .tag{color:var(--muted);font-size:13px;border-left:1px solid var(--border);padding-left:12px}
+              h1{font-size:20px;color:var(--navy)}h2{font-size:16px;margin-top:28px;color:var(--navy)}h3{font-size:14px;margin:0 0 8px}
+              a{color:#018a5b}
               table{width:100%;border-collapse:collapse;margin-top:8px}
-              th,td{text-align:left;padding:6px 8px;border-bottom:1px solid #d0d7de;vertical-align:top}
-              th{font-weight:600;color:#57606a}
-              .nowrap{white-space:nowrap}.muted{color:#57606a}
-              .badge{color:#fff;border-radius:6px;padding:1px 8px;font-size:12px}
+              th,td{text-align:left;padding:7px 8px;border-bottom:1px solid var(--border);vertical-align:top}
+              th{font-weight:600;color:var(--muted);font-size:12px;text-transform:uppercase;letter-spacing:.03em}
+              tr:hover td{background:#f4f9f6}
+              .nowrap{white-space:nowrap}.muted{color:var(--muted)}
+              .badge{color:#fff;border-radius:6px;padding:1px 8px;font-size:12px;font-weight:600}
               .forms{display:flex;gap:16px;flex-wrap:wrap}
-              form{border:1px solid #d0d7de;border-radius:8px;padding:12px;display:flex;flex-direction:column;gap:6px;min-width:220px;flex:1}
-              input,select,button{padding:6px 8px;border-radius:6px;border:1px solid #d0d7de;font:inherit}
-              button{background:#1f6feb;color:#fff;border:0;cursor:pointer}
-              .card{border:1px solid #d0d7de;border-radius:8px;padding:12px 16px;margin:12px 0}
-              .card h3{display:flex;align-items:center;gap:8px;margin:0 0 6px}
-              pre{white-space:pre-wrap;word-break:break-word;background:#f6f8fa;padding:10px;border-radius:6px;margin:8px 0;font:12px/1.5 ui-monospace,monospace}
+              form{background:var(--surface);border:1px solid var(--border);border-top:3px solid var(--green);border-radius:10px;padding:14px;display:flex;flex-direction:column;gap:7px;min-width:220px;flex:1}
+              input,select,button{padding:7px 9px;border-radius:7px;border:1px solid var(--border);font:inherit;color:var(--navy)}
+              input:focus,select:focus{outline:2px solid var(--green-bright);border-color:var(--green)}
+              button{background:var(--green);color:#fff;border:0;cursor:pointer;font-weight:600}
+              button:hover{background:#018a5b}
+              .card{background:var(--surface);border:1px solid var(--border);border-left:4px solid var(--green);border-radius:10px;padding:12px 16px;margin:12px 0}
+              .card h3{display:flex;align-items:center;gap:8px;margin:0 0 6px;font-size:15px}
+              pre{white-space:pre-wrap;word-break:break-word;background:#f4f9f6;padding:10px;border-radius:6px;margin:8px 0;font:12px/1.5 ui-monospace,monospace;border:1px solid var(--border)}
               .shots{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
-              .shots img{max-width:240px;max-height:160px;border:1px solid #d0d7de;border-radius:6px}
+              .shots img{max-width:240px;max-height:160px;border:1px solid var(--border);border-radius:6px}
             </style></head><body>
-            {$body}
+            <header class="brand">{$logo}<span class="tag">tickets → merge requests, automated</span></header>
+            <div class="wrap">{$body}</div>
             </body></html>
             HTML;
     }
