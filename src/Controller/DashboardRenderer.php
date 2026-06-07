@@ -89,6 +89,7 @@ final class DashboardRenderer
     {
         $sourceSelect = $this->select('source', $sources, $defaultSource);
         $agentSelect = $this->select('agent', $agents, $defaultAgent);
+        $modelInput = '<input name="model" placeholder="Model (optional)">';
         $url = $this->e($launchUrl);
 
         return <<<HTML
@@ -97,7 +98,7 @@ final class DashboardRenderer
                 <input type="hidden" name="action" value="auto-dev">
                 <h3>Develop</h3>
                 <input name="ticket" placeholder="Ticket key (e.g. PROJ-123)" required>
-                {$sourceSelect}{$agentSelect}
+                {$sourceSelect}{$agentSelect}{$modelInput}
                 <button type="submit">Run auto-dev</button>
               </form>
               <form method="post" action="{$url}">
@@ -105,7 +106,7 @@ final class DashboardRenderer
                 <h3>Iterate</h3>
                 <input name="ticket" placeholder="Ticket key" required>
                 <input name="branch" placeholder="Branch (optional)">
-                {$sourceSelect}{$agentSelect}
+                {$sourceSelect}{$agentSelect}{$modelInput}
                 <button type="submit">Iterate on feedback</button>
               </form>
               <form method="post" action="{$url}">
@@ -113,7 +114,7 @@ final class DashboardRenderer
                 <h3>Review</h3>
                 <input name="ticket" placeholder="Ticket key" required>
                 <input name="url" placeholder="Review app URL (optional)">
-                {$sourceSelect}{$agentSelect}
+                {$sourceSelect}{$agentSelect}{$modelInput}
                 <button type="submit">Run review</button>
               </form>
             </div>

@@ -22,6 +22,8 @@ final class DashboardRendererTest extends TestCase
         self::assertStringContainsString('value="auto-dev"', $html);
         self::assertStringContainsString('value="iterate"', $html);
         self::assertStringContainsString('value="review"', $html);
+        // Every launch form lets you pick the model.
+        self::assertSame(3, substr_count($html, 'name="model"'));
     }
 
     public function testPageHidesLaunchFormsWhenNotAllowed(): void

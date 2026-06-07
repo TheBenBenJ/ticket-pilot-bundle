@@ -78,6 +78,7 @@ final class DashboardLaunchController
             'IA_TICKET' => $ticket,
             'IA_SOURCE' => '' !== $source ? $source : $this->defaultSource,
             'IA_AGENT' => '' !== $agent ? $agent : $this->defaultAgent,
+            'IA_MODEL' => trim((string) $request->request->get('model', '')),
         ];
 
         if ('iterate' === $action) {
