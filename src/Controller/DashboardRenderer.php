@@ -141,7 +141,7 @@ final class DashboardRenderer
         $metaLine = [] !== $meta ? '<div class="muted">'.implode(' · ', $meta).'</div>' : '';
 
         $link = '' !== $run->url ? \sprintf('<div><a href="%s" target="_blank" rel="noopener">%s</a></div>', $this->e($run->url), $this->e($run->url)) : '';
-        $summary = '' !== trim($run->summary) ? '<pre>'.$this->e($run->summary).'</pre>' : '';
+        $summary = '' !== trim($run->summary) ? '<div class="md">'.$this->markdown($run->summary).'</div>' : '';
         $shots = $this->screenshots($run->screenshots);
 
         return \sprintf(
@@ -167,22 +167,123 @@ final class DashboardRenderer
             return '';
         }
 
-        $items = '';
-        foreach ($screenshots as $shot) {
-            // A URL/served path (or data URI) is shown as an image; a bare name as text.
-            $items .= $this->isViewable($shot)
-                ? \sprintf('<a href="%s" target="_blank" rel="noopener"><img src="%s" alt="" loading="lazy"></a>', $this->e($shot), $this->e($shot))
-                : \sprintf('<li>%s</li>', $this->e(basename($shot)));
+        // Bare names (older runs, or shots only attached to the ticket and not
+        // web-served): we can't display them, so just list them.
+        if (!$this->isViewable($screenshots[0])) {
+            $items = '';
+            foreach ($screenshots as $shot) {
+                $items .= '<li>'.$this->e(basename($shot)).'</li>';
+            }
+
+            return '<details open><summary>Screenshots (attached to the ticket)</summary><ul>'.$items.'</ul></details>';
         }
 
-        return $this->isViewable($screenshots[0])
-            ? '<div class="shots">'.$items.'</div>'
-            : '<details open><summary>Screenshots (attached to the ticket)</summary><ul>'.$items.'</ul></details>';
+        $items = '';
+        foreach ($screenshots as $shot) {
+            $name = $this->e(basename($shot));
+            $src = $this->e($shot);
+            $items .= '<figure class="shot"><a href="'.$src.'" target="_blank" rel="noopener">'
+                .'<img src="'.$src.'" alt="'.$name.'" loading="lazy"></a>'
+                .'<figcaption>'.$name.'</figcaption></figure>';
+        }
+
+        return '<div class="shots">'.$items.'</div>';
     }
 
     private function isViewable(string $shot): bool
     {
         return str_starts_with($shot, 'http') || str_starts_with($shot, '/') || str_starts_with($shot, 'data:');
+    }
+
+    /**
+     * Renders a lightweight Markdown subset (headings, bold/italic/code, bullet
+     * and ordered lists, paragraphs) to HTML so review summaries read nicely
+     * instead of as a raw block. Everything is escaped before formatting, so the
+     * (untrusted) agent text can never inject markup.
+     */
+    private function markdown(string $text): string
+    {
+        $lines = preg_split('/\r\n|\r|\n/', trim($text)) ?: [];
+
+        $html = '';
+        /** @var list<string> $para */
+        $para = [];
+        /** @var 'ul'|'ol'|null $list */
+        $list = null;
+
+        $flushPara = static function () use (&$para, &$html): void {
+            if ([] !== $para) {
+                $html .= '<p>'.implode('<br>', $para).'</p>';
+                $para = [];
+            }
+        };
+        $closeList = static function () use (&$list, &$html): void {
+            if (null !== $list) {
+                $html .= '</'.$list.'>';
+                $list = null;
+            }
+        };
+
+        foreach ($lines as $raw) {
+            $line = trim($raw);
+
+            if ('' === $line) {
+                $flushPara();
+                $closeList();
+                continue;
+            }
+
+            if (1 === preg_match('/^(#{1,6})\s+(.*)$/', $line, $m)) {
+                $flushPara();
+                $closeList();
+                $level = min(6, 3 + \strlen($m[1]));
+                $html .= '<h'.$level.'>'.$this->inline($m[2]).'</h'.$level.'>';
+                continue;
+            }
+
+            if (1 === preg_match('/^[-*+]\s+(.*)$/', $line, $m)) {
+                $flushPara();
+                if ('ul' !== $list) {
+                    $closeList();
+                    $html .= '<ul>';
+                    $list = 'ul';
+                }
+                $html .= '<li>'.$this->inline($m[1]).'</li>';
+                continue;
+            }
+
+            if (1 === preg_match('/^\d+[.)]\s+(.*)$/', $line, $m)) {
+                $flushPara();
+                if ('ol' !== $list) {
+                    $closeList();
+                    $html .= '<ol>';
+                    $list = 'ol';
+                }
+                $html .= '<li>'.$this->inline($m[1]).'</li>';
+                continue;
+            }
+
+            $closeList();
+            $para[] = $this->inline($line);
+        }
+
+        $flushPara();
+        $closeList();
+
+        return $html;
+    }
+
+    /**
+     * Escapes the text, then applies inline Markdown (code, bold, italic).
+     */
+    private function inline(string $text): string
+    {
+        $out = $this->e($text);
+        $out = preg_replace('/`([^`]+)`/', '<code>$1</code>', $out) ?? $out;
+        $out = preg_replace('/\*\*([^*]+)\*\*/', '<strong>$1</strong>', $out) ?? $out;
+        $out = preg_replace('/(?<![\w*])[*_]([^*_\s][^*_]*?)[*_](?![\w*])/', '<em>$1</em>', $out) ?? $out;
+
+        return $out;
     }
 
     /**
@@ -278,8 +379,18 @@ final class DashboardRenderer
               .card{background:var(--surface);border:1px solid var(--border);border-left:4px solid var(--green);border-radius:10px;padding:12px 16px;margin:12px 0}
               .card h3{display:flex;align-items:center;gap:8px;margin:0 0 6px;font-size:15px}
               pre{white-space:pre-wrap;word-break:break-word;background:#f4f9f6;padding:10px;border-radius:6px;margin:8px 0;font:12px/1.5 ui-monospace,monospace;border:1px solid var(--border)}
-              .shots{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
-              .shots img{max-width:240px;max-height:160px;border:1px solid var(--border);border-radius:6px}
+              .md{margin:8px 0}
+              .md h4,.md h5,.md h6{margin:12px 0 4px;color:var(--navy)}
+              .md h4{font-size:14px}.md h5{font-size:13px}.md h6{font-size:12px}
+              .md p{margin:6px 0}
+              .md ul,.md ol{margin:6px 0;padding-left:20px}.md li{margin:2px 0}
+              .md code{background:#eef4f0;padding:1px 5px;border-radius:4px;font:12px/1.45 ui-monospace,monospace}
+              .md strong{color:var(--navy)}
+              .shots{display:flex;gap:12px;flex-wrap:wrap;margin-top:10px}
+              .shots .shot{margin:0;width:240px}
+              .shots img{width:240px;height:150px;object-fit:cover;border:1px solid var(--border);border-radius:8px;display:block;transition:transform .1s ease,border-color .1s ease}
+              .shots a:hover img{transform:scale(1.02);border-color:var(--green)}
+              .shots figcaption{font-size:11px;color:var(--muted);margin-top:4px;word-break:break-all}
             </style></head><body>
             <header class="brand">{$logo}<span class="tag">tickets → merge requests, automated</span></header>
             <div class="wrap">{$body}</div>

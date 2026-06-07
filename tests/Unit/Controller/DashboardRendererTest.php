@@ -71,6 +71,33 @@ final class DashboardRendererTest extends TestCase
         $html = (new DashboardRenderer())->ticketTimeline('PROJ-1', $runs, '/back');
 
         self::assertStringContainsString('<img src="/ticket-pilot/screenshots/abc/home.png"', $html);
+        // Each viewable shot is a clickable thumbnail with its filename as caption.
+        self::assertStringContainsString('<figure class="shot">', $html);
+        self::assertStringContainsString('<figcaption>home.png</figcaption>', $html);
+    }
+
+    public function testTicketTimelineFormatsTheSummaryAsMarkdown(): void
+    {
+        $summary = "## Verdict\nREVIEW **PASSED**\n\n- checked the `home` screen\n- no regression";
+        $runs = [new RunRecord('1', 'review', 'PROJ-1', 'passed', '2026-01-01T10:00:00+00:00', '', $summary, '', '', '', 0.0)];
+
+        $html = (new DashboardRenderer())->ticketTimeline('PROJ-1', $runs, '/back');
+
+        self::assertStringContainsString('<h5>Verdict</h5>', $html);
+        self::assertStringContainsString('<strong>PASSED</strong>', $html);
+        self::assertStringContainsString('<ul><li>checked the <code>home</code> screen</li>', $html);
+        self::assertStringNotContainsString('<pre>', $html);
+    }
+
+    public function testMarkdownEscapesUntrustedSummary(): void
+    {
+        $runs = [new RunRecord('1', 'review', 'PROJ-1', 'failed', '2026-01-01T10:00:00+00:00', '', '<img src=x onerror=alert(1)> **bold**', '', '', '', 0.0)];
+
+        $html = (new DashboardRenderer())->ticketTimeline('PROJ-1', $runs, '/back');
+
+        self::assertStringNotContainsString('<img src=x', $html);
+        self::assertStringContainsString('&lt;img src=x', $html);
+        self::assertStringContainsString('<strong>bold</strong>', $html);
     }
 
     public function testPageEmbedsTheBrandLogoAndColors(): void

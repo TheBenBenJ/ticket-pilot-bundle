@@ -5,6 +5,21 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.0] - 2026-06-07
+
+### Added
+- **Dashboard timeline — formatted review.** The review summary is now rendered as a lightweight
+  Markdown subset (headings, bold/italic, inline code, bullet/ordered lists, paragraphs) instead
+  of a raw `<pre>` block, so verdicts read cleanly. The agent text is escaped before formatting,
+  so it can never inject markup.
+- **Dashboard timeline — screenshot gallery.** Viewable screenshots (web-served URLs/paths) are
+  shown as clickable thumbnails with their filename as caption, in a responsive gallery.
+
+### Notes
+- Screenshots only appear when the dashboard runs **≥ 0.9.0** (the ingest that saves the uploaded
+  screenshots under a web-served dir and rewrites them to public URLs). A dashboard on an older
+  version lists the screenshot names only. Redeploy the dashboard environment to display them.
+
 ## [0.9.0] - 2026-06-07
 
 ### Added
