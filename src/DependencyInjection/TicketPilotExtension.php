@@ -165,6 +165,7 @@ final class TicketPilotExtension extends Extension
             '%ticket_pilot.default_source%',
             '%ticket_pilot.default_agent%',
             new Reference(PipelineTriggerInterface::class, ContainerBuilder::NULL_ON_INVALID_REFERENCE),
+            new Reference(JsonlRunStore::class),
         ]);
         $launch->addTag('controller.service_arguments');
         $launch->setPublic(true);

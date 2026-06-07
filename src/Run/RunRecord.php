@@ -15,6 +15,7 @@ final readonly class RunRecord
     public const TYPE_ITERATE = 'iterate';
     public const TYPE_REVIEW = 'review';
 
+    public const STATUS_QUEUED = 'queued';
     public const STATUS_SUCCESS = 'success';
     public const STATUS_FAILED = 'failed';
     public const STATUS_SKIPPED = 'skipped';

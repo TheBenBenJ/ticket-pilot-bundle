@@ -5,6 +5,13 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.2] - 2026-06-07
+
+### Added
+- Dashboard launch now records a `queued` run immediately (on the dashboard env), with the
+  triggered pipeline link, so it shows in the list right after the click — the CI job adds the
+  outcome record when it finishes.
+
 ## [0.7.1] - 2026-06-07
 
 ### Added

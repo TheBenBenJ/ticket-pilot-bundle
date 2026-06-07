@@ -8,6 +8,8 @@ use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
 use TheBenBenJ\TicketPilotBundle\Contract\PipelineTriggerInterface;
+use TheBenBenJ\TicketPilotBundle\Run\RunRecord;
+use TheBenBenJ\TicketPilotBundle\Run\RunStoreInterface;
 
 /**
  * Launches a run from the dashboard by triggering a CI pipeline carrying the
@@ -28,6 +30,7 @@ final class DashboardLaunchController
         private readonly string $defaultSource,
         private readonly string $defaultAgent,
         private readonly ?PipelineTriggerInterface $pipelineTrigger = null,
+        private readonly ?RunStoreInterface $store = null,
     ) {
     }
 
@@ -55,6 +58,22 @@ final class DashboardLaunchController
             $pipeline = $this->pipelineTrigger->triggerPipeline($this->defaultRef, $variables);
         } catch (\RuntimeException $e) {
             return new Response($this->renderer->confirmation('Failed to launch: '.$e->getMessage(), $back), 502);
+        }
+
+        // Best-effort: record a "queued" run on the dashboard env so it shows up
+        // immediately; the CI job adds the outcome record when it finishes.
+        try {
+            $this->store?->record(RunRecord::create(
+                $action,
+                $ticket,
+                RunRecord::STATUS_QUEUED,
+                (string) ($variables['IA_BRANCH'] ?? ''),
+                \sprintf('Launched from the dashboard (pipeline #%d).', $pipeline->id),
+                $pipeline->url,
+                (string) ($variables['IA_AGENT'] ?? ''),
+                (string) ($variables['IA_SOURCE'] ?? ''),
+            ));
+        } catch (\Throwable) {
         }
 
         return new Response($this->renderer->confirmation(

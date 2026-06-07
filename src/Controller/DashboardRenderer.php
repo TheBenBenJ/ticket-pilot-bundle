@@ -13,6 +13,7 @@ use TheBenBenJ\TicketPilotBundle\Run\RunRecord;
 final class DashboardRenderer
 {
     private const STATUS_COLORS = [
+        RunRecord::STATUS_QUEUED => '#1f6feb',
         RunRecord::STATUS_SUCCESS => '#02ad72',
         RunRecord::STATUS_PASSED => '#02ad72',
         RunRecord::STATUS_FAILED => '#cf222e',
