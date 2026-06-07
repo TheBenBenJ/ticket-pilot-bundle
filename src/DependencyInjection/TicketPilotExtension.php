@@ -100,9 +100,9 @@ final class TicketPilotExtension extends Extension
             return;
         }
 
-        $path = (string) $config['tracking']['path'];
-        $isAbsolute = '' !== $path && ('/' === $path[0] || 1 === preg_match('#^[A-Za-z]:[\\\\/]#', $path));
-        $resolved = $isAbsolute ? $path : rtrim($projectDir, '/').'/'.ltrim($path, '/');
+        $resolved = $this->resolveProjectPath((string) $config['tracking']['path'], $projectDir);
+        $screenshotsDir = $this->resolveProjectPath((string) $config['tracking']['screenshots_dir'], $projectDir);
+        $screenshotsBaseUrl = (string) $config['tracking']['screenshots_base_url'];
 
         // The canonical store is always the local JSONL file (the env that serves
         // the dashboard owns it). The dashboard, the CLI and the ingest endpoint
@@ -134,8 +134,8 @@ final class TicketPilotExtension extends Extension
         $ingest = new Definition(RunIngestController::class, [
             new Reference(JsonlRunStore::class),
             $ingestToken,
-            (string) $config['tracking']['screenshots_dir'],
-            (string) $config['tracking']['screenshots_base_url'],
+            $screenshotsDir,
+            $screenshotsBaseUrl,
         ]);
         $ingest->addTag('controller.service_arguments');
         $ingest->setPublic(true);
@@ -659,6 +659,20 @@ final class TicketPilotExtension extends Extension
         $definition->addTag('controller.service_arguments');
         $definition->setPublic(true);
         $container->setDefinition(TriggerPipelineController::class, $definition);
+    }
+
+    /**
+     * Resolves a project-relative or %kernel.project_dir%-prefixed path to an
+     * absolute filesystem path.
+     */
+    private function resolveProjectPath(string $path, string $projectDir): string
+    {
+        $path = str_replace('%kernel.project_dir%', $projectDir, $path);
+        if ('' !== $path && ('/' === $path[0] || 1 === preg_match('#^[A-Za-z]:[\\\\/]#', $path))) {
+            return $path;
+        }
+
+        return rtrim($projectDir, '/').'/'.ltrim($path, '/');
     }
 
     /**

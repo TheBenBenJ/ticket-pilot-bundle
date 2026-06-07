@@ -5,6 +5,16 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.1] - 2026-06-07
+
+### Fixed
+- **Dashboard review screenshots (ingest).** `tracking.screenshots_dir` is now resolved to a real
+  absolute path (`%kernel.project_dir%` and relative paths work), so the ingest endpoint can
+  actually create `public/ticket-pilot/screenshots/<runId>/` and store viewable URLs in the
+  JSONL run at the same time. Previously the literal `%kernel.project_dir%` string made mkdir
+  fail silently and the run kept bare filenames (no `<img>` preview). Falls back to the
+  screenshot names when saving fails.
+
 ## [0.10.0] - 2026-06-07
 
 ### Added

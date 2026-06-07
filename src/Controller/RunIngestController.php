@@ -42,8 +42,11 @@ final class RunIngestController
         $files = $data['_files'] ?? null;
         unset($data['_files']);
 
+        $fallback = array_values(array_filter(array_map('strval', (array) ($data['screenshots'] ?? [])), static fn (string $s): bool => '' !== $s));
+
         if (\is_array($files) && [] !== $files && '' !== $this->screenshotsDir) {
-            $data['screenshots'] = $this->saveScreenshots($files, (string) ($data['id'] ?? bin2hex(random_bytes(6))));
+            $urls = $this->saveScreenshots($files, (string) ($data['id'] ?? bin2hex(random_bytes(6))));
+            $data['screenshots'] = [] !== $urls ? $urls : $fallback;
         }
 
         $this->store->record(RunRecord::fromArray($data));
@@ -72,7 +75,6 @@ final class RunIngestController
             if (!\is_array($file) || !isset($file['name'], $file['data'])) {
                 continue;
             }
-            // Keep only the base name to avoid path traversal.
             $name = basename((string) $file['name']);
             $raw = base64_decode((string) $file['data'], true);
             if (false === $raw || '' === $name) {

@@ -78,10 +78,28 @@ final class RunIngestControllerTest extends TestCase
         self::assertFileExists($dir.'/abc123/home.png');
         self::assertSame('PNGBYTES', file_get_contents($dir.'/abc123/home.png'));
 
-        // cleanup
         unlink($dir.'/abc123/home.png');
         @rmdir($dir.'/abc123');
         @rmdir($dir);
+    }
+
+    public function testFallbackKeepsScreenshotNamesWhenSaveFails(): void
+    {
+        $store = new CapturingStore();
+        $controller = new RunIngestController($store, 'secret', '/not/writable/path', '/shots');
+
+        $payload = json_encode([
+            'id' => 'abc123',
+            'type' => 'review',
+            'ticketKey' => 'PROJ-1',
+            'status' => 'passed',
+            'screenshots' => ['home.png'],
+            '_files' => [['name' => 'home.png', 'data' => base64_encode('PNGBYTES')]],
+        ]);
+        $response = $controller($this->request('secret', (string) $payload));
+
+        self::assertSame(201, $response->getStatusCode());
+        self::assertSame(['home.png'], $store->records[0]->screenshots);
     }
 }
 
