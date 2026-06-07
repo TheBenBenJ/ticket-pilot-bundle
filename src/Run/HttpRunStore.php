@@ -34,28 +34,15 @@ final class HttpRunStore implements RunStoreInterface
     public function record(RunRecord $record): void
     {
         $payload = $record->toArray();
-
-        // Attach the screenshots that exist as local files (base64 over JSON, so no
-        // multipart/mime dependency). The ingest saves them and rewrites the record's
-        // screenshots to public URLs; the wire payload stays transient.
-        $files = [];
-        $names = [];
-        foreach ($record->screenshots as $shot) {
-            $names[] = basename($shot);
-            if (is_file($shot) && ($raw = @file_get_contents($shot)) !== false) {
-                $files[] = ['name' => basename($shot), 'data' => base64_encode($raw)];
-            }
-        }
-        $payload['screenshots'] = $names;
-        if ([] !== $files) {
-            $payload['_files'] = $files;
-        }
+        // Embed screenshots as data URIs so the dashboard can render <img> without
+        // relying on a writable public/ directory on the ingest env.
+        $payload['screenshots'] = RunScreenshotEncoder::toViewable($record->screenshots);
 
         try {
             $this->client->request('POST', $this->url, [
                 'headers' => ['X-Ticket-Pilot-Token' => $this->token],
                 'json' => $payload,
-                'timeout' => 30,
+                'timeout' => 120,
             ])->getStatusCode();
         } catch (HttpExceptionInterface $e) {
             // Best-effort: forwarding a run must never break the pipeline.

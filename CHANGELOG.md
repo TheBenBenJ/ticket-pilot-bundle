@@ -5,6 +5,19 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.2] - 2026-06-07
+
+### Fixed
+- **Dashboard review screenshots.** Runs now embed screenshots as `data:` URIs in the JSONL
+  (CI ingest and local `ia:review`), so the timeline renders `<img>` previews without relying on
+  a writable `public/ticket-pilot/screenshots/` directory.
+
+### Added
+- **Dashboard launch forms — model dropdown.** Each form shows a `<select>` of models for the
+  chosen agent. Cursor models are queried live via `agent models` when available; Claude uses the
+  documented aliases (`default`, `opus`, `sonnet`, …) with config fallbacks
+  (`agents.cursor.models`, `agents.claude.models`).
+
 ## [0.10.1] - 2026-06-07
 
 ### Fixed

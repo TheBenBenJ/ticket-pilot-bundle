@@ -85,8 +85,12 @@ final class RunIngestControllerTest extends TestCase
 
     public function testFallbackKeepsScreenshotNamesWhenSaveFails(): void
     {
+        // A regular file where a directory is expected: mkdir must fail even as root.
+        $blocked = sys_get_temp_dir().'/tpb-ingest-blocked-'.bin2hex(random_bytes(4));
+        file_put_contents($blocked, 'not a directory');
+
         $store = new CapturingStore();
-        $controller = new RunIngestController($store, 'secret', '/not/writable/path', '/shots');
+        $controller = new RunIngestController($store, 'secret', $blocked, '/shots');
 
         $payload = json_encode([
             'id' => 'abc123',
@@ -100,6 +104,8 @@ final class RunIngestControllerTest extends TestCase
 
         self::assertSame(201, $response->getStatusCode());
         self::assertSame(['home.png'], $store->records[0]->screenshots);
+
+        unlink($blocked);
     }
 }
 

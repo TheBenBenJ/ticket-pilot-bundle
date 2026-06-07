@@ -13,6 +13,7 @@ use Symfony\Component\DependencyInjection\Extension\Extension;
 use Symfony\Component\DependencyInjection\Reference;
 use Symfony\Component\HttpClient\RetryableHttpClient;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
+use TheBenBenJ\TicketPilotBundle\Agent\AgentModelCatalog;
 use TheBenBenJ\TicketPilotBundle\Agent\ClaudeAgent;
 use TheBenBenJ\TicketPilotBundle\Agent\CursorAgent;
 use TheBenBenJ\TicketPilotBundle\Attachment\AttachmentCollector;
@@ -153,9 +154,12 @@ final class TicketPilotExtension extends Extension
             new Reference('router'),
             new Reference(TicketSourceRegistry::class),
             new Reference(AgentRegistry::class),
+            new Reference(AgentModelCatalog::class),
             '%ticket_pilot.default_source%',
             '%ticket_pilot.default_agent%',
             $hasVcs,
+            $config['agents']['cursor']['enabled'] ? (string) $config['agents']['cursor']['binary'] : '',
+            $config['agents']['claude']['enabled'] ? (string) $config['agents']['claude']['binary'] : '',
         ]);
         $dashboard->addTag('controller.service_arguments');
         $dashboard->setPublic(true);
@@ -483,6 +487,18 @@ final class TicketPilotExtension extends Extension
             $definition->addTag(self::TAG_AGENT);
             $container->setDefinition(ClaudeAgent::class, $definition);
         }
+
+        $configuredModels = [];
+        if ($cursor['enabled']) {
+            $configuredModels['cursor'] = $cursor['models'];
+        }
+        if ($claude['enabled']) {
+            $configuredModels['claude'] = $claude['models'];
+        }
+        $container->setDefinition(AgentModelCatalog::class, new Definition(AgentModelCatalog::class, [
+            $configuredModels,
+            new Reference(LoggerInterface::class, ContainerBuilder::NULL_ON_INVALID_REFERENCE),
+        ]));
     }
 
     /**

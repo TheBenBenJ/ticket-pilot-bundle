@@ -21,6 +21,7 @@ use TheBenBenJ\TicketPilotBundle\Review\AgentReviewRunner;
 use TheBenBenJ\TicketPilotBundle\Review\RecipeRepository;
 use TheBenBenJ\TicketPilotBundle\Review\ReviewUrlResolver;
 use TheBenBenJ\TicketPilotBundle\Run\RunRecord;
+use TheBenBenJ\TicketPilotBundle\Run\RunScreenshotEncoder;
 use TheBenBenJ\TicketPilotBundle\Run\RunStoreInterface;
 use TheBenBenJ\TicketPilotBundle\Service\BranchPlanner;
 
@@ -152,7 +153,7 @@ final class ReviewCommand extends Command
             \is_string($agentName) ? $agentName : '',
             (string) $input->getOption('source'),
             0.0,
-            array_values($result->screenshots),
+            RunScreenshotEncoder::toViewable(array_values($result->screenshots)),
         ));
 
         return $this->verdict($io, $ticket, $result->passed);
@@ -203,7 +204,7 @@ final class ReviewCommand extends Command
             '',
             (string) $input->getOption('source'),
             0.0,
-            array_values($result->screenshots),
+            RunScreenshotEncoder::toViewable(array_values($result->screenshots)),
         ));
 
         return $this->verdict($io, $ticket, $result->passed);

@@ -47,7 +47,7 @@ final class HttpRunStoreTest extends TestCase
         $this->expectNotToPerformAssertions();
     }
 
-    public function testRecordAttachsLocalScreenshotsAsBase64Files(): void
+    public function testRecordEmbedsLocalScreenshotsAsDataUris(): void
     {
         $png = sys_get_temp_dir().'/tpb-shot-'.bin2hex(random_bytes(4)).'.png';
         file_put_contents($png, 'PNGBYTES');
@@ -64,12 +64,11 @@ final class HttpRunStoreTest extends TestCase
 
         unlink($png);
 
-        // The screenshot file is base64-encoded into _files; the wire keeps base names
-        // in screenshots (the ingest rewrites them to public URLs).
-        self::assertStringContainsString('"_files"', $body);
-        self::assertStringContainsString(base64_encode('PNGBYTES'), $body);
-        self::assertStringContainsString('"name":"'.basename($png).'"', $body);
-        self::assertStringContainsString('"screenshots":["'.basename($png).'"]', $body);
+        self::assertStringNotContainsString('"_files"', $body);
+        $decoded = json_decode($body, true);
+        self::assertIsArray($decoded);
+        self::assertStringStartsWith('data:image/png;base64,', (string) ($decoded['screenshots'][0] ?? ''));
+        self::assertStringContainsString(base64_encode('PNGBYTES'), (string) ($decoded['screenshots'][0] ?? ''));
     }
 
     public function testRecentIsNotSupportedRemotely(): void

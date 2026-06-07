@@ -40,12 +40,13 @@ final class DashboardRenderer
     /**
      * @param list<RunRecord> $runs
      * @param list<string>    $sources
-     * @param list<string>    $agents
-     * @param string          $detailUrlTemplate URL with a "__TICKET__" placeholder, linked per ticket
+     * @param list<string>              $agents
+     * @param string                    $detailUrlTemplate URL with a "__TICKET__" placeholder, linked per ticket
+     * @param array<string, list<string>> $agentModels     Models per agent for the launch forms
      */
-    public function page(array $runs, string $launchUrl, bool $canLaunch, array $sources, array $agents, string $defaultSource, string $defaultAgent, string $detailUrlTemplate = ''): string
+    public function page(array $runs, string $launchUrl, bool $canLaunch, array $sources, array $agents, string $defaultSource, string $defaultAgent, string $detailUrlTemplate = '', array $agentModels = []): string
     {
-        $forms = $canLaunch ? $this->launchForms($launchUrl, $sources, $agents, $defaultSource, $defaultAgent) : '<p class="muted">Enable a VCS provider exposing pipelines to launch runs from here.</p>';
+        $forms = $canLaunch ? $this->launchForms($launchUrl, $sources, $agents, $defaultSource, $defaultAgent, $agentModels) : '<p class="muted">Enable a VCS provider exposing pipelines to launch runs from here.</p>';
         $rows = '' === ($r = $this->rows($runs, $detailUrlTemplate)) ? '<tr><td colspan="7" class="muted">No run recorded yet.</td></tr>' : $r;
 
         return $this->layout(
@@ -179,8 +180,8 @@ final class DashboardRenderer
         }
 
         $items = '';
-        foreach ($screenshots as $shot) {
-            $name = $this->e(basename($shot));
+        foreach ($screenshots as $i => $shot) {
+            $name = $this->e($this->shotLabel($shot, $i));
             $src = $this->e($shot);
             $items .= '<figure class="shot"><a href="'.$src.'" target="_blank" rel="noopener">'
                 .'<img src="'.$src.'" alt="'.$name.'" loading="lazy"></a>'
@@ -193,6 +194,17 @@ final class DashboardRenderer
     private function isViewable(string $shot): bool
     {
         return str_starts_with($shot, 'http') || str_starts_with($shot, '/') || str_starts_with($shot, 'data:');
+    }
+
+    private function shotLabel(string $shot, int $index): string
+    {
+        if (str_starts_with($shot, 'data:')) {
+            return \sprintf('screenshot-%d.png', $index + 1);
+        }
+
+        $name = basename($shot);
+
+        return '' !== $name ? $name : \sprintf('screenshot-%d', $index + 1);
     }
 
     /**
@@ -287,14 +299,16 @@ final class DashboardRenderer
     }
 
     /**
-     * @param list<string> $sources
-     * @param list<string> $agents
+     * @param list<string>                $sources
+     * @param list<string>                $agents
+     * @param array<string, list<string>> $agentModels
      */
-    private function launchForms(string $launchUrl, array $sources, array $agents, string $defaultSource, string $defaultAgent): string
+    private function launchForms(string $launchUrl, array $sources, array $agents, string $defaultSource, string $defaultAgent, array $agentModels): string
     {
         $sourceSelect = $this->select('source', $sources, $defaultSource);
-        $agentSelect = $this->select('agent', $agents, $defaultAgent);
-        $modelInput = '<input name="model" placeholder="Model (optional)">';
+        $agentSelect = $this->select('agent', $agents, $defaultAgent, 'tp-agent');
+        $modelSelect = $this->modelSelect($agentModels[$defaultAgent] ?? []);
+        $modelsJson = json_encode($agentModels, \JSON_THROW_ON_ERROR | \JSON_UNESCAPED_UNICODE | \JSON_HEX_TAG | \JSON_HEX_AMP | \JSON_HEX_APOS | \JSON_HEX_QUOT);
         $url = $this->e($launchUrl);
 
         return <<<HTML
@@ -303,7 +317,7 @@ final class DashboardRenderer
                 <input type="hidden" name="action" value="auto-dev">
                 <h3>Develop</h3>
                 <input name="ticket" placeholder="Ticket key (e.g. PROJ-123)" required>
-                {$sourceSelect}{$agentSelect}{$modelInput}
+                {$sourceSelect}{$agentSelect}{$modelSelect}
                 <button type="submit">Run auto-dev</button>
               </form>
               <form method="post" action="{$url}">
@@ -311,7 +325,7 @@ final class DashboardRenderer
                 <h3>Iterate</h3>
                 <input name="ticket" placeholder="Ticket key" required>
                 <input name="branch" placeholder="Branch (optional)">
-                {$sourceSelect}{$agentSelect}{$modelInput}
+                {$sourceSelect}{$agentSelect}{$modelSelect}
                 <button type="submit">Iterate on feedback</button>
               </form>
               <form method="post" action="{$url}">
@@ -319,17 +333,53 @@ final class DashboardRenderer
                 <h3>Review</h3>
                 <input name="ticket" placeholder="Ticket key" required>
                 <input name="url" placeholder="Review app URL (optional)">
-                {$sourceSelect}{$agentSelect}{$modelInput}
+                {$sourceSelect}{$agentSelect}{$modelSelect}
                 <button type="submit">Run review</button>
               </form>
             </div>
+            <script type="application/json" id="tp-agent-models">{$modelsJson}</script>
+            <script>
+            (function () {
+              const raw = document.getElementById('tp-agent-models');
+              if (!raw) return;
+              const models = JSON.parse(raw.textContent);
+              function sync(agentSelect) {
+                const form = agentSelect.closest('form');
+                const model = form.querySelector('.tp-model');
+                const list = models[agentSelect.value] || [];
+                const cur = model.value;
+                model.innerHTML = '<option value="">(default)</option>' +
+                  list.map(function (m) {
+                    return '<option value="' + m.replace(/&/g, '&amp;').replace(/"/g, '&quot;') + '">' + m + '</option>';
+                  }).join('');
+                if (list.indexOf(cur) !== -1) model.value = cur;
+              }
+              document.querySelectorAll('.tp-agent').forEach(function (sel) {
+                sel.addEventListener('change', function () { sync(sel); });
+                sync(sel);
+              });
+            })();
+            </script>
             HTML;
+    }
+
+    /**
+     * @param list<string> $models
+     */
+    private function modelSelect(array $models): string
+    {
+        $opts = '<option value="">(default)</option>';
+        foreach ($models as $model) {
+            $opts .= \sprintf('<option value="%s">%s</option>', $this->e($model), $this->e($model));
+        }
+
+        return '<select name="model" class="tp-model">'.$opts.'</select>';
     }
 
     /**
      * @param list<string> $options
      */
-    private function select(string $name, array $options, string $selected): string
+    private function select(string $name, array $options, string $selected, string $class = ''): string
     {
         if ([] === $options) {
             return '';
@@ -340,7 +390,9 @@ final class DashboardRenderer
             $opts .= \sprintf('<option%s>%s</option>', $option === $selected ? ' selected' : '', $this->e($option));
         }
 
-        return \sprintf('<select name="%s">%s</select>', $this->e($name), $opts);
+        $classAttr = '' !== $class ? \sprintf(' class="%s"', $this->e($class)) : '';
+
+        return \sprintf('<select name="%s"%s>%s</select>', $this->e($name), $classAttr, $opts);
     }
 
     private function layout(string $body): string

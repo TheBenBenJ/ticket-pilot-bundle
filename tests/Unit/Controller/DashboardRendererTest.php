@@ -14,7 +14,8 @@ final class DashboardRendererTest extends TestCase
     {
         $runs = [new RunRecord('1', 'review', 'PROJ-9', 'inconclusive', '2026-01-01T10:00:00+00:00', 'feat/PROJ-9', 'no data on env')];
 
-        $html = (new DashboardRenderer())->page($runs, '/ia/dashboard/launch', true, ['jira'], ['cursor', 'claude'], 'jira', 'cursor');
+        $models = ['cursor' => ['auto', 'gpt-4'], 'claude' => ['default', 'opus']];
+        $html = (new DashboardRenderer())->page($runs, '/ia/dashboard/launch', true, ['jira'], ['cursor', 'claude'], 'jira', 'cursor', '', $models);
 
         self::assertStringContainsString('PROJ-9', $html);
         self::assertStringContainsString('inconclusive', $html);
@@ -22,8 +23,10 @@ final class DashboardRendererTest extends TestCase
         self::assertStringContainsString('value="auto-dev"', $html);
         self::assertStringContainsString('value="iterate"', $html);
         self::assertStringContainsString('value="review"', $html);
-        // Every launch form lets you pick the model.
-        self::assertSame(3, substr_count($html, 'name="model"'));
+        self::assertSame(3, substr_count($html, 'class="tp-model"'));
+        self::assertStringContainsString('"cursor":["auto","gpt-4"]', $html);
+        self::assertStringContainsString('value="auto"', $html);
+        self::assertStringContainsString('class="tp-agent"', $html);
     }
 
     public function testPageHidesLaunchFormsWhenNotAllowed(): void
@@ -74,6 +77,17 @@ final class DashboardRendererTest extends TestCase
         // Each viewable shot is a clickable thumbnail with its filename as caption.
         self::assertStringContainsString('<figure class="shot">', $html);
         self::assertStringContainsString('<figcaption>home.png</figcaption>', $html);
+    }
+
+    public function testTicketTimelineRendersDataUriScreenshotsAsImages(): void
+    {
+        $data = 'data:image/png;base64,'.base64_encode('PNG');
+        $runs = [new RunRecord('1', 'review', 'PROJ-1', 'passed', '2026-01-01T10:00:00+00:00', '', 'ok', '', '', '', 0.0, [$data])];
+
+        $html = (new DashboardRenderer())->ticketTimeline('PROJ-1', $runs, '/back');
+
+        self::assertStringContainsString('<img src="'.$data.'"', $html);
+        self::assertStringContainsString('<figcaption>screenshot-1.png</figcaption>', $html);
     }
 
     public function testTicketTimelineFormatsTheSummaryAsMarkdown(): void
