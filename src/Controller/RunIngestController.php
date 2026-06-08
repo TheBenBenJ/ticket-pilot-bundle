@@ -7,6 +7,7 @@ namespace TheBenBenJ\TicketPilotBundle\Controller;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use TheBenBenJ\TicketPilotBundle\Run\RunRecord;
+use TheBenBenJ\TicketPilotBundle\Run\RunScenarioPersister;
 use TheBenBenJ\TicketPilotBundle\Run\RunScreenshotPersister;
 use TheBenBenJ\TicketPilotBundle\Run\RunStoreInterface;
 
@@ -24,6 +25,7 @@ final class RunIngestController
         private readonly RunStoreInterface $store,
         private readonly string $token,
         private readonly RunScreenshotPersister $screenshotPersister,
+        private readonly RunScenarioPersister $scenarioPersister,
     ) {
     }
 
@@ -52,6 +54,14 @@ final class RunIngestController
         );
         if ([] !== $urls) {
             $data['screenshots'] = $urls;
+        }
+
+        $scenario = (string) ($data['scenario'] ?? '');
+        if ('' !== trim($scenario)) {
+            $scenarioUrl = $this->scenarioPersister->persist((string) $data['ticketKey'], $scenario);
+            if ('' !== $scenarioUrl) {
+                $data['scenarioUrl'] = $scenarioUrl;
+            }
         }
 
         $this->store->record(RunRecord::fromArray($data));

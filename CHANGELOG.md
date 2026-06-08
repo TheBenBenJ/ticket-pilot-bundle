@@ -5,6 +5,14 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.2] - 2026-06-08
+
+### Added
+- **Review scenarios on the dashboard (CI ingest).** `ia:review` now includes the
+  `scenario` Markdown in the run payload POSTed to `/ia/runs` (same path as screenshots).
+  The ingest endpoint persists it under `tracking.scenarios_dir` and stores the public
+  URL in `scenarioUrl`. The ticket timeline shows a collapsible « Review scenario » block.
+
 ## [0.11.1] - 2026-06-08
 
 ### Changed

@@ -93,6 +93,32 @@ final class DashboardRendererTest extends TestCase
         self::assertStringContainsString('<figcaption>screenshot-1.png</figcaption>', $html);
     }
 
+    public function testTicketTimelineRendersReviewScenario(): void
+    {
+        $runs = [new RunRecord(
+            '1',
+            'review',
+            'PROJ-1',
+            'passed',
+            '2026-01-01T10:00:00+00:00',
+            '',
+            'ok',
+            '',
+            '',
+            '',
+            0.0,
+            [],
+            "## Étapes\n1. Ouvrir le planning",
+            '/ticket-pilot/scenarios/PROJ-1.md',
+        )];
+
+        $html = (new DashboardRenderer())->ticketTimeline('PROJ-1', $runs, '/back');
+
+        self::assertStringContainsString('Review scenario', $html);
+        self::assertStringContainsString('Ouvrir le planning', $html);
+        self::assertStringContainsString('/ticket-pilot/scenarios/PROJ-1.md', $html);
+    }
+
     public function testTicketTimelineFormatsTheSummaryAsMarkdown(): void
     {
         $summary = "## Verdict\nREVIEW **PASSED**\n\n- checked the `home` screen\n- no regression";

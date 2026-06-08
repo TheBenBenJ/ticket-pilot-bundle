@@ -24,6 +24,8 @@ final readonly class RunRecord
 
     /**
      * @param list<string> $screenshots Names (or URLs) of screenshots produced by a review
+     * @param string       $scenario    Markdown scenario the agent executed (review runs)
+     * @param string       $scenarioUrl Public URL of the persisted scenario file (dashboard host)
      */
     public function __construct(
         public string $id,
@@ -38,6 +40,8 @@ final readonly class RunRecord
         public string $source = '',
         public float $duration = 0.0,
         public array $screenshots = [],
+        public string $scenario = '',
+        public string $scenarioUrl = '',
     ) {
     }
 
@@ -57,6 +61,8 @@ final readonly class RunRecord
         string $source = '',
         float $duration = 0.0,
         array $screenshots = [],
+        string $scenario = '',
+        string $scenarioUrl = '',
     ): self {
         return new self(
             bin2hex(random_bytes(6)),
@@ -71,6 +77,8 @@ final readonly class RunRecord
             $source,
             $duration,
             $screenshots,
+            $scenario,
+            $scenarioUrl,
         );
     }
 
@@ -92,6 +100,8 @@ final readonly class RunRecord
             'source' => $this->source,
             'duration' => $this->duration,
             'screenshots' => $this->screenshots,
+            'scenario' => $this->scenario,
+            'scenarioUrl' => $this->scenarioUrl,
         ];
     }
 
@@ -113,6 +123,8 @@ final readonly class RunRecord
             (string) ($data['source'] ?? ''),
             (float) ($data['duration'] ?? 0.0),
             array_values(array_filter(array_map('strval', (array) ($data['screenshots'] ?? [])), static fn (string $s): bool => '' !== $s)),
+            (string) ($data['scenario'] ?? ''),
+            (string) ($data['scenarioUrl'] ?? ''),
         );
     }
 }

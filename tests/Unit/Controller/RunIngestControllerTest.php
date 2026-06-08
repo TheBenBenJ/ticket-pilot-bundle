@@ -8,6 +8,7 @@ use PHPUnit\Framework\TestCase;
 use Symfony\Component\HttpFoundation\Request;
 use TheBenBenJ\TicketPilotBundle\Controller\RunIngestController;
 use TheBenBenJ\TicketPilotBundle\Run\RunRecord;
+use TheBenBenJ\TicketPilotBundle\Run\RunScenarioPersister;
 use TheBenBenJ\TicketPilotBundle\Run\RunScreenshotPersister;
 use TheBenBenJ\TicketPilotBundle\Run\RunStoreInterface;
 
@@ -26,7 +27,7 @@ final class RunIngestControllerTest extends TestCase
     public function testValidTokenAndPayloadRecordsTheRun(): void
     {
         $store = new CapturingStore();
-        $controller = new RunIngestController($store, 'secret', new RunScreenshotPersister('', ''));
+        $controller = new RunIngestController($store, 'secret', new RunScreenshotPersister('', ''), new RunScenarioPersister('', ''));
 
         $body = (string) json_encode((new RunRecord('1', 'iterate', 'P-7', 'success', '2026-01-01T10:00:00+00:00'))->toArray());
         $response = $controller($this->request('secret', $body));
@@ -39,7 +40,7 @@ final class RunIngestControllerTest extends TestCase
     public function testWrongTokenIsRejected(): void
     {
         $store = new CapturingStore();
-        $response = (new RunIngestController($store, 'secret', new RunScreenshotPersister('', '')))($this->request('nope', '{"type":"review","ticketKey":"P-1"}'));
+        $response = (new RunIngestController($store, 'secret', new RunScreenshotPersister('', ''), new RunScenarioPersister('', '')))($this->request('nope', '{"type":"review","ticketKey":"P-1"}'));
 
         self::assertSame(401, $response->getStatusCode());
         self::assertSame([], $store->records);
@@ -47,14 +48,14 @@ final class RunIngestControllerTest extends TestCase
 
     public function testEmptyConfiguredTokenDisablesIngestion(): void
     {
-        $response = (new RunIngestController(new CapturingStore(), '', new RunScreenshotPersister('', '')))($this->request('anything', '{"type":"review","ticketKey":"P-1"}'));
+        $response = (new RunIngestController(new CapturingStore(), '', new RunScreenshotPersister('', ''), new RunScenarioPersister('', '')))($this->request('anything', '{"type":"review","ticketKey":"P-1"}'));
 
         self::assertSame(401, $response->getStatusCode());
     }
 
     public function testInvalidPayloadIsRejected(): void
     {
-        $response = (new RunIngestController(new CapturingStore(), 'secret', new RunScreenshotPersister('', '')))($this->request('secret', 'not json'));
+        $response = (new RunIngestController(new CapturingStore(), 'secret', new RunScreenshotPersister('', ''), new RunScenarioPersister('', '')))($this->request('secret', 'not json'));
 
         self::assertSame(400, $response->getStatusCode());
     }
@@ -63,7 +64,7 @@ final class RunIngestControllerTest extends TestCase
     {
         $dir = sys_get_temp_dir().'/tpb-ingest-'.bin2hex(random_bytes(4));
         $store = new CapturingStore();
-        $controller = new RunIngestController($store, 'secret', new RunScreenshotPersister($dir, '/ticket-pilot/screenshots'));
+        $controller = new RunIngestController($store, 'secret', new RunScreenshotPersister($dir, '/ticket-pilot/screenshots'), new RunScenarioPersister('', ''));
 
         $payload = json_encode([
             'id' => 'abc123',
@@ -88,7 +89,7 @@ final class RunIngestControllerTest extends TestCase
     {
         $dir = sys_get_temp_dir().'/tpb-ingest-'.bin2hex(random_bytes(4));
         $store = new CapturingStore();
-        $controller = new RunIngestController($store, 'secret', new RunScreenshotPersister($dir, '/ticket-pilot/screenshots'));
+        $controller = new RunIngestController($store, 'secret', new RunScreenshotPersister($dir, '/ticket-pilot/screenshots'), new RunScenarioPersister('', ''));
 
         $data = 'data:image/png;base64,'.base64_encode('PNGBYTES');
         $payload = json_encode([
@@ -116,7 +117,7 @@ final class RunIngestControllerTest extends TestCase
         file_put_contents($blocked, 'not a directory');
 
         $store = new CapturingStore();
-        $controller = new RunIngestController($store, 'secret', new RunScreenshotPersister($blocked, '/shots'));
+        $controller = new RunIngestController($store, 'secret', new RunScreenshotPersister($blocked, '/shots'), new RunScenarioPersister('', ''));
 
         $payload = json_encode([
             'id' => 'abc123',
@@ -132,6 +133,35 @@ final class RunIngestControllerTest extends TestCase
         self::assertSame(['home.png'], $store->records[0]->screenshots);
 
         unlink($blocked);
+    }
+
+    public function testScenarioIsSavedAndUrlStoredInRun(): void
+    {
+        $dir = sys_get_temp_dir().'/tpb-ingest-scenario-'.bin2hex(random_bytes(4));
+        $store = new CapturingStore();
+        $controller = new RunIngestController(
+            $store,
+            'secret',
+            new RunScreenshotPersister('', ''),
+            new RunScenarioPersister($dir, '/ticket-pilot/scenarios'),
+        );
+
+        $payload = json_encode([
+            'id' => 'rev01',
+            'type' => 'review',
+            'ticketKey' => 'LYSI-99',
+            'status' => 'passed',
+            'scenario' => "# Scénario\n1. Ouvrir l'app",
+        ]);
+        $response = $controller($this->request('secret', (string) $payload));
+
+        self::assertSame(201, $response->getStatusCode());
+        self::assertSame("# Scénario\n1. Ouvrir l'app", $store->records[0]->scenario);
+        self::assertSame('/ticket-pilot/scenarios/LYSI-99.md', $store->records[0]->scenarioUrl);
+        self::assertFileExists($dir.'/LYSI-99.md');
+
+        @unlink($dir.'/LYSI-99.md');
+        @rmdir($dir);
     }
 }
 

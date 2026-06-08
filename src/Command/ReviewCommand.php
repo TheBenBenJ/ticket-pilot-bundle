@@ -161,6 +161,7 @@ final class ReviewCommand extends Command
             (string) $input->getOption('source'),
             $result->duration,
             array_values($result->screenshots),
+            $result->scenario,
         ));
 
         return $this->verdict($io, $ticket, $result->passed);

@@ -56,6 +56,8 @@ final class DashboardTicketController
             $run->source,
             $run->duration,
             $this->screenshotResolver->resolve($run),
+            $run->scenario,
+            $run->scenarioUrl,
         );
     }
 }

@@ -144,11 +144,12 @@ final class DashboardRenderer
 
         $link = '' !== $run->url ? \sprintf('<div><a href="%s" target="_blank" rel="noopener">%s</a></div>', $this->e($run->url), $this->e($run->url)) : '';
         $summary = '' !== trim($run->summary) ? '<div class="md">'.$this->markdown($run->summary).'</div>' : '';
+        $scenario = $this->scenarioBlock($run);
         $shots = $this->screenshots($run->screenshots);
 
         return \sprintf(
             '<section class="card"><h3>%s <span class="badge" style="background:%s">%s</span> '
-            .'<span class="muted">%s</span></h3>%s%s%s%s</section>',
+            .'<span class="muted">%s</span></h3>%s%s%s%s%s</section>',
             $this->e($run->type),
             $color,
             $this->e($run->status),
@@ -156,8 +157,25 @@ final class DashboardRenderer
             $metaLine,
             $link,
             $summary,
+            $scenario,
             $shots,
         );
+    }
+
+    private function scenarioBlock(RunRecord $run): string
+    {
+        if (RunRecord::TYPE_REVIEW !== $run->type || '' === trim($run->scenario)) {
+            return '';
+        }
+
+        $file = '' !== $run->scenarioUrl
+            ? \sprintf('<p class="muted"><a href="%s" target="_blank" rel="noopener">Scenario file</a></p>', $this->e($run->scenarioUrl))
+            : '';
+
+        return '<details class="scenario"><summary>Review scenario</summary>'
+            .'<div class="md">'.$this->markdown($run->scenario).'</div>'
+            .$file
+            .'</details>';
     }
 
     /**
@@ -448,6 +466,8 @@ final class DashboardRenderer
               .shots img{width:240px;height:150px;object-fit:cover;border:1px solid var(--border);border-radius:8px;display:block;transition:transform .1s ease,border-color .1s ease}
               .shot-open:hover img{transform:scale(1.02);border-color:var(--green)}
               .shots figcaption{font-size:11px;color:var(--muted);margin-top:4px;word-break:break-all}
+              details.scenario{margin:10px 0 4px;border:1px solid var(--border);border-radius:8px;padding:8px 12px;background:#f8fbfa}
+              details.scenario summary{cursor:pointer;font-weight:600;color:var(--navy)}
               .lightbox{position:fixed;inset:0;z-index:1000;background:rgba(1,26,54,.9);display:flex;align-items:center;justify-content:center;padding:48px 56px}
               .lightbox[hidden]{display:none}
               .lightbox-figure{margin:0;max-width:min(95vw,1200px);text-align:center}

@@ -70,6 +70,12 @@ final class Configuration implements ConfigurationInterface
             ->scalarNode('screenshots_base_url')->defaultValue('/ticket-pilot/screenshots')
                 ->info('Public URL prefix the saved screenshots are served from (matches screenshots_dir).')
             ->end()
+            ->scalarNode('scenarios_dir')->defaultValue('%kernel.project_dir%/public/ticket-pilot/scenarios')
+                ->info('Where the dashboard env saves review scenarios received through the ingest (web-served — under public/).')
+            ->end()
+            ->scalarNode('scenarios_base_url')->defaultValue('/ticket-pilot/scenarios')
+                ->info('Public URL prefix the saved scenario files are served from (matches scenarios_dir).')
+            ->end()
         ->end()->end();
     }
 

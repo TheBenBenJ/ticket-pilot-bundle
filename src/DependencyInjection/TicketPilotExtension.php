@@ -56,6 +56,7 @@ use TheBenBenJ\TicketPilotBundle\Review\ReviewReportRenderer;
 use TheBenBenJ\TicketPilotBundle\Review\ReviewUrlResolver;
 use TheBenBenJ\TicketPilotBundle\Run\HttpRunStore;
 use TheBenBenJ\TicketPilotBundle\Run\JsonlRunStore;
+use TheBenBenJ\TicketPilotBundle\Run\RunScenarioPersister;
 use TheBenBenJ\TicketPilotBundle\Run\RunScreenshotPersister;
 use TheBenBenJ\TicketPilotBundle\Run\RunScreenshotResolver;
 use TheBenBenJ\TicketPilotBundle\Run\RunStoreInterface;
@@ -108,10 +109,16 @@ final class TicketPilotExtension extends Extension
         $resolved = $this->resolveProjectPath((string) $config['tracking']['path'], $projectDir);
         $screenshotsDir = $this->resolveProjectPath((string) $config['tracking']['screenshots_dir'], $projectDir);
         $screenshotsBaseUrl = (string) $config['tracking']['screenshots_base_url'];
+        $scenariosDir = $this->resolveProjectPath((string) $config['tracking']['scenarios_dir'], $projectDir);
+        $scenariosBaseUrl = (string) $config['tracking']['scenarios_base_url'];
 
         $container->setDefinition(RunScreenshotPersister::class, new Definition(RunScreenshotPersister::class, [
             $screenshotsDir,
             $screenshotsBaseUrl,
+        ]));
+        $container->setDefinition(RunScenarioPersister::class, new Definition(RunScenarioPersister::class, [
+            $scenariosDir,
+            $scenariosBaseUrl,
         ]));
         $container->setDefinition(RunScreenshotResolver::class, new Definition(RunScreenshotResolver::class, [
             $screenshotsDir,
@@ -126,6 +133,7 @@ final class TicketPilotExtension extends Extension
         $container->setDefinition(TrackedRunStore::class, new Definition(TrackedRunStore::class, [
             new Reference(JsonlRunStore::class),
             new Reference(RunScreenshotPersister::class),
+            new Reference(RunScenarioPersister::class),
         ]));
 
         // What the runner commands WRITE through: a remote HTTP store when
@@ -154,6 +162,7 @@ final class TicketPilotExtension extends Extension
             new Reference(JsonlRunStore::class),
             $ingestToken,
             new Reference(RunScreenshotPersister::class),
+            new Reference(RunScenarioPersister::class),
         ]);
         $ingest->addTag('controller.service_arguments');
         $ingest->setPublic(true);
