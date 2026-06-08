@@ -84,4 +84,24 @@ final class AgentReviewPromptBuilderTest extends TestCase
         self::assertStringContainsString('BatchMode=yes', $prompt);
         self::assertStringContainsString('never run it with empty arguments', $prompt);
     }
+
+    public function testWriteScenarioAddsScenarioBlockInstructions(): void
+    {
+        $builder = new AgentReviewPromptBuilder(
+            'French',
+            '',
+            '',
+            '<<<S',
+            'S>>>',
+            true,
+            '<<<SC',
+            'SC>>>',
+            '.ticket-pilot/scenarios/LYSI-1.md',
+        );
+        $prompt = $builder->build(new Ticket('LYSI-1', 't', 'd', 'Task', 'jira'), 'https://app.test');
+
+        self::assertStringContainsString('<<<SC', $prompt);
+        self::assertStringContainsString('SC>>>', $prompt);
+        self::assertStringContainsString('.ticket-pilot/scenarios/LYSI-1.md', $prompt);
+    }
 }

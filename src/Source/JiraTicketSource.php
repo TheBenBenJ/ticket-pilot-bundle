@@ -12,11 +12,13 @@ use TheBenBenJ\TicketPilotBundle\Contract\AgentReviewReporterInterface;
 use TheBenBenJ\TicketPilotBundle\Contract\AttachmentDownloaderInterface;
 use TheBenBenJ\TicketPilotBundle\Contract\IterationReporterInterface;
 use TheBenBenJ\TicketPilotBundle\Contract\ReviewReporterInterface;
+use TheBenBenJ\TicketPilotBundle\Contract\TicketLifecycleReporterInterface;
 use TheBenBenJ\TicketPilotBundle\Contract\TicketReporterInterface;
 use TheBenBenJ\TicketPilotBundle\Contract\TicketSourceInterface;
 use TheBenBenJ\TicketPilotBundle\Model\Attachment;
 use TheBenBenJ\TicketPilotBundle\Model\MergeRequest;
 use TheBenBenJ\TicketPilotBundle\Model\Ticket;
+use TheBenBenJ\TicketPilotBundle\Review\AgentReviewPromptBuilder;
 use TheBenBenJ\TicketPilotBundle\Review\AgentReviewResult;
 use TheBenBenJ\TicketPilotBundle\Review\RecipeResult;
 use TheBenBenJ\TicketPilotBundle\Review\ReviewSummary;
@@ -27,7 +29,7 @@ use TheBenBenJ\TicketPilotBundle\Review\ReviewSummary;
  * Pending tickets are selected by JQL: a configurable label at a configurable
  * status, ordered by priority then creation date.
  */
-final class JiraTicketSource implements TicketSourceInterface, TicketReporterInterface, ReviewReporterInterface, AgentReviewReporterInterface, AttachmentDownloaderInterface, IterationReporterInterface
+final class JiraTicketSource implements TicketSourceInterface, TicketReporterInterface, TicketLifecycleReporterInterface, ReviewReporterInterface, AgentReviewReporterInterface, AttachmentDownloaderInterface, IterationReporterInterface
 {
     private const NAME = 'jira';
 
@@ -44,6 +46,11 @@ final class JiraTicketSource implements TicketSourceInterface, TicketReporterInt
         private readonly string $pendingStatus,
         HttpClientInterface $httpClient,
         ?LoggerInterface $logger = null,
+        private readonly string $statusAfterMergeRequest = '',
+        private readonly string $statusAfterReviewPassed = '',
+        private readonly string $statusAfterReviewFailed = '',
+        private readonly string $statusAfterReviewInconclusive = '',
+        private readonly string $statusAfterIterate = '',
     ) {
         $this->baseUri = rtrim($baseUri, '/').'/';
         $this->client = $httpClient->withOptions([
@@ -111,17 +118,44 @@ final class JiraTicketSource implements TicketSourceInterface, TicketReporterInt
     public function reportMergeRequest(Ticket $ticket, MergeRequest $mergeRequest): void
     {
         $this->postComment($ticket->key, \sprintf('🤖 Merge request opened: %s', $mergeRequest->url));
+        $this->onMergeRequestOpened($ticket);
+    }
+
+    public function onMergeRequestOpened(Ticket $ticket): void
+    {
+        $this->transitionToStatus($ticket->key, $this->statusAfterMergeRequest);
+    }
+
+    public function onReviewFinished(Ticket $ticket, bool $passed, bool $inconclusive): void
+    {
+        if ($passed) {
+            $this->transitionToStatus($ticket->key, $this->statusAfterReviewPassed);
+
+            return;
+        }
+
+        $status = $inconclusive && '' !== $this->statusAfterReviewInconclusive
+            ? $this->statusAfterReviewInconclusive
+            : $this->statusAfterReviewFailed;
+        $this->transitionToStatus($ticket->key, $status);
+    }
+
+    public function onIterateFinished(Ticket $ticket): void
+    {
+        $this->transitionToStatus($ticket->key, $this->statusAfterIterate);
     }
 
     public function reportIteration(Ticket $ticket, string $branch, string $summary): void
     {
         $text = \sprintf("🤖 Iterated on %s after feedback:\n%s", $branch, '' !== trim($summary) ? $summary : '(no summary)');
         $this->postComment($ticket->key, $text);
+        $this->onIterateFinished($ticket);
     }
 
     public function reportReview(Ticket $ticket, RecipeResult $result): void
     {
         $this->postComment($ticket->key, ReviewSummary::plain($ticket, $result));
+        $this->onReviewFinished($ticket, $result->passed, false);
     }
 
     public function reportAgentReview(Ticket $ticket, AgentReviewResult $result): void
@@ -135,8 +169,14 @@ final class JiraTicketSource implements TicketSourceInterface, TicketReporterInt
             $this->uploadAttachment($ticket->key, $screenshot);
         }
 
-        $header = \sprintf('🤖 Agent review %s — %s', $result->passed ? '✅ PASSED' : '❌ FAILED', $ticket->key);
+        $inconclusive = str_contains(mb_strtoupper($result->summary), AgentReviewPromptBuilder::INCONCLUSIVE_TOKEN);
+        $header = \sprintf(
+            '🤖 Agent review %s — %s',
+            $result->passed ? '✅ PASSED' : ($inconclusive ? '⚠️ INCONCLUSIVE' : '❌ FAILED'),
+            $ticket->key,
+        );
         $this->postComment($ticket->key, $header."\n\n".$result->summary);
+        $this->onReviewFinished($ticket, $result->passed, $inconclusive);
     }
 
     /**
@@ -195,6 +235,38 @@ final class JiraTicketSource implements TicketSourceInterface, TicketReporterInt
         }
 
         return $paths;
+    }
+
+    /**
+     * Transitions the issue to the first available workflow step whose target status
+     * matches $statusName. No-op when the name is empty or no transition fits.
+     */
+    private function transitionToStatus(string $key, string $statusName): void
+    {
+        if ('' === trim($statusName)) {
+            return;
+        }
+
+        try {
+            $data = $this->client->request('GET', \sprintf('rest/api/3/issue/%s/transitions', $key))->toArray();
+            foreach ($data['transitions'] ?? [] as $transition) {
+                if (!\is_array($transition)) {
+                    continue;
+                }
+                if (($transition['to']['name'] ?? '') !== $statusName) {
+                    continue;
+                }
+                $this->client->request('POST', \sprintf('rest/api/3/issue/%s/transitions', $key), [
+                    'json' => ['transition' => ['id' => $transition['id']]],
+                ])->getStatusCode();
+
+                return;
+            }
+
+            $this->logger->warning(\sprintf('JiraTicketSource: no transition to "%s" for %s', $statusName, $key));
+        } catch (HttpExceptionInterface $e) {
+            $this->logger->warning(\sprintf('JiraTicketSource::transitionToStatus(%s, %s) failed: %s', $key, $statusName, $e->getMessage()));
+        }
     }
 
     /**

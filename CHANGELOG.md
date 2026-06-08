@@ -5,6 +5,21 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.0] - 2026-06-08
+
+### Added
+- **Review scenario persistence.** The agent review prompt requires a `<<<REVIEW_SCENARIO` /
+  `REVIEW_SCENARIO>>>` block; `ScenarioRepository` saves it under `review.scenarios_dir`
+  (default `.ticket-pilot/scenarios/<ticket>.md`). `AgentReviewResult` exposes
+  `scenario`, `scenarioPath` and `duration`.
+- **Jira lifecycle transitions.** Optional `sources.jira.status_after_*` settings move tickets
+  after merge request, review (passed / failed / inconclusive) and iterate. Implemented via
+  `TicketLifecycleReporterInterface` on `JiraTicketSource`.
+- **Distributed lock on `ia:review`.** `AgentReviewRunner` acquires a per-ticket lock
+  (same pattern as auto-dev / iterate) to prevent concurrent duplicate reviews.
+- **Full model dropdown.** `AgentModelCatalog` merges live Cursor CLI output, configured
+  models and a built-in known list so the dashboard never shows only `auto` / `default`.
+
 ## [0.10.3] - 2026-06-08
 
 ### Fixed

@@ -47,6 +47,7 @@ use TheBenBenJ\TicketPilotBundle\Registry\AgentRegistry;
 use TheBenBenJ\TicketPilotBundle\Registry\TicketSourceRegistry;
 use TheBenBenJ\TicketPilotBundle\Review\AgentReviewPromptBuilder;
 use TheBenBenJ\TicketPilotBundle\Review\AgentReviewRunner;
+use TheBenBenJ\TicketPilotBundle\Review\ScenarioRepository;
 use TheBenBenJ\TicketPilotBundle\Review\ChromeRecipeRunner;
 use TheBenBenJ\TicketPilotBundle\Review\RecipeExecutor;
 use TheBenBenJ\TicketPilotBundle\Review\RecipeFactory;
@@ -252,7 +253,7 @@ final class TicketPilotExtension extends Extension
         $container->setDefinition(ReviewUrlResolver::class, new Definition(ReviewUrlResolver::class, [$review['url_pattern']]));
 
         if ('agent' === $review['driver']) {
-            $this->registerAgentReview($container, $review, $base, $screenshotDir, $config['prompt']['language']);
+            $this->registerAgentReview($container, $review, $base, $screenshotDir, $config['prompt']['language'], $config);
 
             return;
         }
@@ -295,10 +296,13 @@ final class TicketPilotExtension extends Extension
      * own tools/MCP) from the ticket and merge request context, then reports a verdict.
      *
      * @param array<string, mixed> $review
+     * @param array<string, mixed> $config
      */
-    private function registerAgentReview(ContainerBuilder $container, array $review, string $base, string $screenshotDir, string $language): void
+    private function registerAgentReview(ContainerBuilder $container, array $review, string $base, string $screenshotDir, string $language, array $config): void
     {
         $rulesFile = '' !== $review['rules_file'] ? $base.'/'.ltrim($review['rules_file'], '/') : '';
+        $scenariosDir = $base.'/'.ltrim($review['scenarios_dir'], '/');
+        $scenarioHint = rtrim($review['scenarios_dir'], '/').'/<ticket-key>.md';
 
         $container->setDefinition(AgentReviewPromptBuilder::class, new Definition(AgentReviewPromptBuilder::class, [
             $language,
@@ -306,6 +310,10 @@ final class TicketPilotExtension extends Extension
             $screenshotDir,
             $review['summary_start_marker'],
             $review['summary_end_marker'],
+            $review['write_scenario'],
+            $review['scenario_start_marker'],
+            $review['scenario_end_marker'],
+            $scenarioHint,
         ]));
 
         $agentName = '' !== $review['agent'] ? $review['agent'] : '%ticket_pilot.default_agent%';
@@ -324,6 +332,12 @@ final class TicketPilotExtension extends Extension
             $reportRenderer = new Reference(ReviewReportRenderer::class);
         }
 
+        $scenarios = null;
+        if ($review['write_scenario']) {
+            $container->setDefinition(ScenarioRepository::class, new Definition(ScenarioRepository::class, [$scenariosDir]));
+            $scenarios = new Reference(ScenarioRepository::class);
+        }
+
         $container->setDefinition(AgentReviewRunner::class, new Definition(AgentReviewRunner::class, [
             new Reference(AgentRegistry::class),
             new Reference(AgentReviewPromptBuilder::class),
@@ -333,8 +347,13 @@ final class TicketPilotExtension extends Extension
             $review['password'],
             $review['summary_start_marker'],
             $review['summary_end_marker'],
+            $review['scenario_start_marker'],
+            $review['scenario_end_marker'],
             $mergeRequestReader,
             $reportRenderer,
+            $scenarios,
+            new Reference('lock.factory', ContainerBuilder::NULL_ON_INVALID_REFERENCE),
+            $config['agent_timeout'],
         ]));
 
         $this->registerCommand($container, ReviewCommand::class, [
@@ -449,6 +468,11 @@ final class TicketPilotExtension extends Extension
                 $jira['pending_status'],
                 $httpClient,
                 $logger,
+                $jira['status_after_merge_request'],
+                $jira['status_after_review_passed'],
+                $jira['status_after_review_failed'],
+                $jira['status_after_review_inconclusive'],
+                $jira['status_after_iterate'],
             ]);
             $definition->addTag(self::TAG_SOURCE);
             $container->setDefinition(JiraTicketSource::class, $definition);

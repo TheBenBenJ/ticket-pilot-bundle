@@ -57,4 +57,47 @@ final class JiraTicketSourceTest extends TestCase
         self::assertStringContainsString('"type":"doc"', (string) $body);
         self::assertStringContainsString('https://gitlab.example/mr/5', stripslashes((string) $body));
     }
+
+    public function testReportMergeRequestTransitionsToConfiguredStatus(): void
+    {
+        $calls = [];
+        $client = new MockHttpClient(static function (string $method, string $url, array $options) use (&$calls): MockResponse {
+            $calls[] = [$method, $url, $options['body'] ?? null];
+
+            if ('GET' === $method && str_contains($url, '/transitions')) {
+                return new MockResponse(json_encode([
+                    'transitions' => [
+                        ['id' => '21', 'to' => ['name' => 'En recette']],
+                    ],
+                ], \JSON_THROW_ON_ERROR), ['http_code' => 200]);
+            }
+
+            return new MockResponse('{}', ['http_code' => 201]);
+        });
+
+        $source = new JiraTicketSource(
+            'https://jira.example',
+            'bot@example.com',
+            'token',
+            'PROJ',
+            'IA',
+            'To Do',
+            $client,
+            null,
+            'En recette',
+        );
+        $source->reportMergeRequest(
+            new Ticket('PROJ-1', 'Title', 'desc', 'Bug', 'jira'),
+            new MergeRequest(5, 'https://gitlab.example/mr/5'),
+        );
+
+        self::assertCount(3, $calls);
+        self::assertSame('POST', $calls[0][0]);
+        self::assertStringContainsString('/issue/PROJ-1/comment', (string) $calls[0][1]);
+        self::assertSame('GET', $calls[1][0]);
+        self::assertStringContainsString('/issue/PROJ-1/transitions', (string) $calls[1][1]);
+        self::assertSame('POST', $calls[2][0]);
+        self::assertStringContainsString('/issue/PROJ-1/transitions', (string) $calls[2][1]);
+        self::assertStringContainsString('"id":"21"', (string) $calls[2][2]);
+    }
 }

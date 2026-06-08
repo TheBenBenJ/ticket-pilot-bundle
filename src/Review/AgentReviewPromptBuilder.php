@@ -37,6 +37,10 @@ final class AgentReviewPromptBuilder
         private readonly string $screenshotDir = '',
         private readonly string $summaryStartMarker = '<<<REVIEW_SUMMARY',
         private readonly string $summaryEndMarker = 'REVIEW_SUMMARY>>>',
+        private readonly bool $writeScenario = true,
+        private readonly string $scenarioStartMarker = '<<<REVIEW_SCENARIO',
+        private readonly string $scenarioEndMarker = 'REVIEW_SCENARIO>>>',
+        private readonly string $scenarioSaveHint = '',
     ) {
     }
 
@@ -61,6 +65,9 @@ final class AgentReviewPromptBuilder
         $parts[] = $this->projectRules();
         $parts[] = $this->browserInstructions();
         $parts[] = $this->shellSafety();
+        if ($this->writeScenario) {
+            $parts[] = $this->scenarioInstructions();
+        }
         $parts[] = $this->verdictInstructions();
 
         return implode("\n\n", array_filter($parts, static fn (string $p): bool => '' !== trim($p)));
@@ -206,6 +213,38 @@ final class AgentReviewPromptBuilder
               never run it with empty arguments. Guard it: `[ -n "\$VAR" ] && <command> || echo "skipped"`.
             - On any command failure, continue the review through the UI; never retry an interactive
               command and never wait for input.
+            PROMPT;
+    }
+
+    private function scenarioInstructions(): string
+    {
+        $start = $this->scenarioStartMarker;
+        $end = $this->scenarioEndMarker;
+        $hint = '' !== $this->scenarioSaveHint
+            ? \sprintf(' It will be saved to `%s`.', $this->scenarioSaveHint)
+            : '';
+
+        return <<<PROMPT
+            ## Review scenario record (MANDATORY)
+            After you finish testing, BEFORE the verdict block, emit the exact functional
+            scenario you executed so it can be replayed on the next review. In {$this->language},
+            as Markdown (numbered steps, URLs visited, test data used, expected vs observed).{$hint}
+
+            {$start}
+            # Scénario de recette — <ticket key>
+
+            ## Prérequis
+            - <URL, contexte, données>
+
+            ## Étapes
+            1. <action> → <résultat>
+            2. ...
+
+            ## Captures associées
+            - <filename.png>: <what it shows>
+            {$end}
+
+            The scenario block MUST appear before the verdict block.
             PROMPT;
     }
 

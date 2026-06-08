@@ -11,6 +11,7 @@ use TheBenBenJ\TicketPilotBundle\Model\Ticket;
 use TheBenBenJ\TicketPilotBundle\Registry\AgentRegistry;
 use TheBenBenJ\TicketPilotBundle\Review\AgentReviewPromptBuilder;
 use TheBenBenJ\TicketPilotBundle\Review\AgentReviewRunner;
+use TheBenBenJ\TicketPilotBundle\Review\ScenarioRepository;
 
 final class AgentReviewRunnerTest extends TestCase
 {
@@ -34,6 +35,13 @@ final class AgentReviewRunnerTest extends TestCase
     private function ticket(): Ticket
     {
         return new Ticket('PROJ-1', 'Title', 'Desc', 'Bug', 'jira');
+    }
+
+    public function testExtractBlockReadsScenarioBetweenMarkers(): void
+    {
+        $output = "noise\n<<<SC\n1. Login\n2. Check screen\nSC>>>\n<<<S\nREVIEW PASSED\nS>>>";
+
+        self::assertSame("1. Login\n2. Check screen", $this->runner()->extractBlock($output, '<<<SC', 'SC>>>'));
     }
 
     public function testExtractSummaryReadsBetweenMarkers(): void
@@ -115,6 +123,37 @@ final class AgentReviewRunnerTest extends TestCase
 
         self::assertSame($shots, $this->runner()->selectReported($shots, 'REVIEW PASSED, no shot mentioned'));
     }
+
+    public function testRunPersistsScenarioWhenRepositoryIsWired(): void
+    {
+        $dir = sys_get_temp_dir().'/tpb_scenario_'.uniqid();
+        $scenarios = new ScenarioRepository($dir);
+        $agent = new RecordingAgent('cursor', "<<<REVIEW_SCENARIO\n1. Ouvrir l'app\nREVIEW_SCENARIO>>>\n<<<S\nREVIEW PASSED\nS>>>");
+        $runner = new AgentReviewRunner(
+            new AgentRegistry([$agent]),
+            new AgentReviewPromptBuilder(),
+            'cursor',
+            '',
+            '',
+            '',
+            '<<<S',
+            'S>>>',
+            '<<<REVIEW_SCENARIO',
+            'REVIEW_SCENARIO>>>',
+            null,
+            null,
+            $scenarios,
+        );
+
+        $result = $runner->run($this->ticket(), 'https://app.test');
+
+        self::assertSame("1. Ouvrir l'app", $result->scenario);
+        self::assertFileExists((string) $result->scenarioPath);
+        self::assertStringContainsString("1. Ouvrir l'app", (string) file_get_contents((string) $result->scenarioPath));
+
+        @unlink((string) $result->scenarioPath);
+        @rmdir($dir);
+    }
 }
 
 /**
@@ -124,8 +163,10 @@ final class RecordingAgent implements CodingAgentInterface
 {
     public int $calls = 0;
 
-    public function __construct(private readonly string $name)
-    {
+    public function __construct(
+        private readonly string $name,
+        private readonly string $output = "<<<S\nREVIEW PASSED\nS>>>",
+    ) {
     }
 
     public function getName(): string
@@ -137,6 +178,6 @@ final class RecordingAgent implements CodingAgentInterface
     {
         ++$this->calls;
 
-        return new AgentResult(true, "<<<S\nREVIEW PASSED\nS>>>");
+        return new AgentResult(true, $this->output);
     }
 }

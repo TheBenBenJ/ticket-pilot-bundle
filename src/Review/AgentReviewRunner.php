@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace TheBenBenJ\TicketPilotBundle\Review;
 
+use Symfony\Component\Lock\LockFactory;
 use TheBenBenJ\TicketPilotBundle\Contract\MergeRequestReaderInterface;
+use TheBenBenJ\TicketPilotBundle\Exception\TicketLockedException;
 use TheBenBenJ\TicketPilotBundle\Model\Ticket;
 use TheBenBenJ\TicketPilotBundle\Registry\AgentRegistry;
 
@@ -19,6 +21,8 @@ use TheBenBenJ\TicketPilotBundle\Registry\AgentRegistry;
  */
 final class AgentReviewRunner
 {
+    private const LOCK_PREFIX = 'ticket-pilot-review-';
+
     public function __construct(
         private readonly AgentRegistry $agents,
         private readonly AgentReviewPromptBuilder $promptBuilder,
@@ -28,14 +32,21 @@ final class AgentReviewRunner
         private readonly string $password = '',
         private readonly string $summaryStartMarker = '<<<REVIEW_SUMMARY',
         private readonly string $summaryEndMarker = 'REVIEW_SUMMARY>>>',
+        private readonly string $scenarioStartMarker = '<<<REVIEW_SCENARIO',
+        private readonly string $scenarioEndMarker = 'REVIEW_SCENARIO>>>',
         private readonly ?MergeRequestReaderInterface $mergeRequestReader = null,
         private readonly ?ReviewReportRenderer $reportRenderer = null,
+        private readonly ?ScenarioRepository $scenarios = null,
+        private readonly ?LockFactory $lockFactory = null,
+        private readonly int $lockTtl = 3600,
     ) {
     }
 
     /**
      * @param callable(string):void|null $onOutput  Streamed agent-output callback
      * @param string|null                $agentName Agent to drive the review (null/'' = configured default)
+     *
+     * @throws TicketLockedException when another review already holds the ticket lock
      */
     public function run(
         Ticket $ticket,
@@ -50,23 +61,47 @@ final class AgentReviewRunner
             throw new \InvalidArgumentException(\sprintf('Unknown review agent "%s" (available: %s)', $name, implode(', ', $this->agents->names())));
         }
 
-        $mergeRequestDescription = ('' !== $branch && null !== $this->mergeRequestReader)
-            ? $this->mergeRequestReader->mergeRequestDescription($branch)
-            : '';
+        $lock = $this->lockFactory?->createLock(self::LOCK_PREFIX.$ticket->key, (float) $this->lockTtl);
+        if (null !== $lock && !$lock->acquire()) {
+            throw new TicketLockedException($ticket->key);
+        }
 
-        $prompt = $this->promptBuilder->build($ticket, $baseUrl, $mergeRequestDescription, $this->login, $this->password);
+        try {
+            $mergeRequestDescription = ('' !== $branch && null !== $this->mergeRequestReader)
+                ? $this->mergeRequestReader->mergeRequestDescription($branch)
+                : '';
 
-        $this->ensureScreenshotDir();
-        $startedAt = time();
+            $prompt = $this->promptBuilder->build($ticket, $baseUrl, $mergeRequestDescription, $this->login, $this->password);
 
-        $result = $this->agents->get($name)->run($prompt, $model, $onOutput);
+            $this->ensureScreenshotDir();
+            $startedAt = time();
 
-        $summary = $this->extractSummary($result->output);
-        $screenshots = $this->selectReported($this->collectScreenshots($startedAt), $summary);
-        $passed = $this->verdict($summary);
-        $reportPdf = $this->reportRenderer?->render($ticket, $passed, $summary, $screenshots);
+            $result = $this->agents->get($name)->run($prompt, $model, $onOutput);
 
-        return new AgentReviewResult($passed, $summary, $screenshots, $result->output, $reportPdf);
+            $scenario = $this->extractBlock($result->output, $this->scenarioStartMarker, $this->scenarioEndMarker);
+            $scenarioPath = $this->persistScenario($ticket->key, $scenario);
+            $summary = $this->extractSummary($result->output);
+            $screenshots = $this->selectReported($this->collectScreenshots($startedAt), $summary);
+            $passed = $this->verdict($summary);
+            $reportPdf = $this->reportRenderer?->render($ticket, $passed, $summary, $screenshots);
+
+            return new AgentReviewResult($passed, $summary, $screenshots, $result->output, $reportPdf, $result->duration, $scenarioPath, $scenario);
+        } finally {
+            $lock?->release();
+        }
+    }
+
+    private function persistScenario(string $ticketKey, string $scenario): ?string
+    {
+        if (null === $this->scenarios || '' === trim($scenario)) {
+            return null;
+        }
+
+        try {
+            return $this->scenarios->save($ticketKey, $scenario);
+        } catch (\Throwable) {
+            return null;
+        }
     }
 
     private function ensureScreenshotDir(): void
@@ -77,9 +112,6 @@ final class AgentReviewRunner
     }
 
     /**
-     * Collects the images created in the screenshot directory since the review
-     * started (PNG/JPEG), so only this run's screenshots are reported.
-     *
      * @return list<string>
      */
     private function collectScreenshots(int $since): array
@@ -103,11 +135,6 @@ final class AgentReviewRunner
     }
 
     /**
-     * Keeps only the screenshots the agent deemed worth reporting (the ones it
-     * lists by name in its summary), so the ticket gets the meaningful shots and
-     * not every intermediate capture. Falls back to all when the summary names
-     * none of them (never lose the evidence).
-     *
      * @param list<string> $screenshots
      *
      * @return list<string>
@@ -122,28 +149,25 @@ final class AgentReviewRunner
         return [] !== $mentioned ? $mentioned : $screenshots;
     }
 
-    /**
-     * Extracts the agent's summary block delimited by the markers, falling back
-     * to the tail of the output when the markers are missing.
-     */
     public function extractSummary(string $output): string
     {
-        $start = preg_quote($this->summaryStartMarker, '/');
-        $end = preg_quote($this->summaryEndMarker, '/');
+        $extracted = $this->extractBlock($output, $this->summaryStartMarker, $this->summaryEndMarker);
+
+        return '' !== $extracted ? $extracted : trim(mb_substr($output, -2000));
+    }
+
+    public function extractBlock(string $output, string $startMarker, string $endMarker): string
+    {
+        $start = preg_quote($startMarker, '/');
+        $end = preg_quote($endMarker, '/');
 
         if (1 === preg_match('/'.$start.'(.*?)'.$end.'/s', $output, $matches)) {
             return trim($matches[1]);
         }
 
-        return trim(mb_substr($output, -2000));
+        return '';
     }
 
-    /**
-     * A review passes only when the summary explicitly states it passed and
-     * never states it failed or could not be concluded. A "failed" or
-     * "inconclusive" token always wins, so a partial run (scenario not fully
-     * executed) or an ambiguous/empty summary is never reported as passed.
-     */
     public function verdict(string $summary): bool
     {
         $normalized = mb_strtoupper($summary);

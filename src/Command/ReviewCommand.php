@@ -12,6 +12,7 @@ use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Style\SymfonyStyle;
 use TheBenBenJ\TicketPilotBundle\Contract\AgentReviewReporterInterface;
+use TheBenBenJ\TicketPilotBundle\Exception\TicketLockedException;
 use TheBenBenJ\TicketPilotBundle\Contract\RecipeRunnerInterface;
 use TheBenBenJ\TicketPilotBundle\Contract\ReviewReporterInterface;
 use TheBenBenJ\TicketPilotBundle\Model\Ticket;
@@ -120,10 +121,17 @@ final class ReviewCommand extends Command
             $io->error($e->getMessage());
 
             return Command::INVALID;
+        } catch (TicketLockedException $e) {
+            $io->warning($e->getMessage());
+
+            return Command::FAILURE;
         }
 
         $io->newLine(2);
         $io->writeln($result->summary);
+        if (null !== $result->scenarioPath) {
+            $io->writeln(\sprintf('Scenario: %s', $result->scenarioPath));
+        }
         if ([] !== $result->screenshots) {
             $io->writeln(\sprintf('Screenshots: %s', implode(', ', array_map('basename', $result->screenshots))));
         }
@@ -151,7 +159,7 @@ final class ReviewCommand extends Command
             $url,
             \is_string($agentName) ? $agentName : '',
             (string) $input->getOption('source'),
-            0.0,
+            $result->duration,
             array_values($result->screenshots),
         ));
 

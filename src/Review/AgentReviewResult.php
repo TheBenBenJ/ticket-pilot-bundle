@@ -16,6 +16,7 @@ final readonly class AgentReviewResult
     /**
      * @param list<string> $screenshots Absolute paths to the screenshots taken during the review
      * @param string|null  $reportPdf   Absolute path to the consolidated PDF report (null when not generated)
+     * @param string|null  $scenarioPath Absolute path to the saved scenario Markdown (null when not persisted)
      */
     public function __construct(
         public bool $passed,
@@ -23,6 +24,9 @@ final readonly class AgentReviewResult
         public array $screenshots = [],
         public string $rawOutput = '',
         public ?string $reportPdf = null,
+        public float $duration = 0.0,
+        public ?string $scenarioPath = null,
+        public string $scenario = '',
     ) {
     }
 }

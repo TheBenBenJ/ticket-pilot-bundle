@@ -26,6 +26,22 @@ final class AgentModelCatalog
         'opus[1m]',
     ];
 
+    /** @var list<string> */
+    private const CURSOR_KNOWN = [
+        'auto',
+        'composer-1',
+        'claude-4-sonnet',
+        'claude-4-sonnet-thinking',
+        'claude-4-opus',
+        'claude-4-opus-thinking',
+        'gpt-4o',
+        'gpt-4.1',
+        'o3',
+        'o4-mini',
+        'gemini-2.5-pro',
+        'gemini-2.5-flash',
+    ];
+
     private readonly LoggerInterface $logger;
 
     /**
@@ -57,16 +73,37 @@ final class AgentModelCatalog
     public function forAgent(string $agent, string $binary = ''): array
     {
         if ('cursor' === $agent) {
-            $live = $this->cursorModels($binary);
-
-            return [] !== $live ? $live : ($this->configured['cursor'] ?? ['auto']);
+            return $this->mergeUnique(
+                $this->cursorModels($binary),
+                $this->configured['cursor'] ?? [],
+                self::CURSOR_KNOWN,
+            );
         }
 
         if ('claude' === $agent) {
-            return $this->configured['claude'] ?? self::CLAUDE_DEFAULT;
+            return $this->mergeUnique($this->configured['claude'] ?? [], self::CLAUDE_DEFAULT);
         }
 
         return $this->configured[$agent] ?? [];
+    }
+
+    /**
+     * @param list<string> ...$lists
+     *
+     * @return list<string>
+     */
+    private function mergeUnique(array ...$lists): array
+    {
+        $merged = [];
+        foreach ($lists as $list) {
+            foreach ($list as $item) {
+                if ('' !== $item && !\in_array($item, $merged, true)) {
+                    $merged[] = $item;
+                }
+            }
+        }
+
+        return $merged;
     }
 
     /**
