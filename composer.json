@@ -57,7 +57,7 @@
         "check": ["@cs", "@stan", "@test"]
     },
     "extra": {
-        "version": "0.11.0"
+        "version": "0.11.1"
     },
     "config": {
         "sort-packages": true,

@@ -74,9 +74,12 @@ final class DashboardRendererTest extends TestCase
         $html = (new DashboardRenderer())->ticketTimeline('PROJ-1', $runs, '/back');
 
         self::assertStringContainsString('<img src="/ticket-pilot/screenshots/abc/home.png"', $html);
-        // Each viewable shot is a clickable thumbnail with its filename as caption.
+        // Each viewable shot opens in the inline lightbox (no new tab on thumbnail click).
         self::assertStringContainsString('<figure class="shot">', $html);
+        self::assertStringContainsString('class="shot-open"', $html);
+        self::assertStringContainsString('id="tp-lightbox"', $html);
         self::assertStringContainsString('<figcaption>home.png</figcaption>', $html);
+        self::assertStringNotContainsString('target="_blank" rel="noopener"><img src="/ticket-pilot/screenshots/abc/home.png"', $html);
     }
 
     public function testTicketTimelineRendersDataUriScreenshotsAsImages(): void

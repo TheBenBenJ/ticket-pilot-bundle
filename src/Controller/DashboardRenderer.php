@@ -175,8 +175,8 @@ final class DashboardRenderer
             if ($this->isViewable($shot)) {
                 $name = $this->e($this->shotLabel($shot, $i));
                 $src = $this->e($shot);
-                $gallery .= '<figure class="shot"><a href="'.$src.'" target="_blank" rel="noopener">'
-                    .'<img src="'.$src.'" alt="'.$name.'" loading="lazy"></a>'
+                $gallery .= '<figure class="shot"><button type="button" class="shot-open" data-src="'.$src.'" data-caption="'.$name.'" aria-label="View '.$name.'">'
+                    .'<img src="'.$src.'" alt="'.$name.'" loading="lazy"></button>'
                     .'<figcaption>'.$name.'</figcaption></figure>';
                 continue;
             }
@@ -444,14 +444,98 @@ final class DashboardRenderer
               .md strong{color:var(--navy)}
               .shots{display:flex;gap:12px;flex-wrap:wrap;margin-top:10px}
               .shots .shot{margin:0;width:240px}
+              .shot-open{padding:0;border:0;background:none;cursor:zoom-in;display:block;width:100%}
               .shots img{width:240px;height:150px;object-fit:cover;border:1px solid var(--border);border-radius:8px;display:block;transition:transform .1s ease,border-color .1s ease}
-              .shots a:hover img{transform:scale(1.02);border-color:var(--green)}
+              .shot-open:hover img{transform:scale(1.02);border-color:var(--green)}
               .shots figcaption{font-size:11px;color:var(--muted);margin-top:4px;word-break:break-all}
+              .lightbox{position:fixed;inset:0;z-index:1000;background:rgba(1,26,54,.9);display:flex;align-items:center;justify-content:center;padding:48px 56px}
+              .lightbox[hidden]{display:none}
+              .lightbox-figure{margin:0;max-width:min(95vw,1200px);text-align:center}
+              .lightbox-figure img{max-width:100%;max-height:calc(100vh - 120px);object-fit:contain;border-radius:8px;box-shadow:0 8px 32px rgba(0,0,0,.35)}
+              .lightbox-figure figcaption{margin-top:10px;color:#e8eef4;font-size:13px;word-break:break-all}
+              .lightbox-link{display:inline-block;margin-top:8px;color:var(--green-bright);font-size:12px}
+              .lightbox-close,.lightbox-prev,.lightbox-next{position:absolute;border:0;background:rgba(255,255,255,.12);color:#fff;font-size:28px;line-height:1;width:44px;height:44px;border-radius:50%;cursor:pointer}
+              .lightbox-close:hover,.lightbox-prev:hover,.lightbox-next:hover{background:rgba(255,255,255,.22)}
+              .lightbox-close{top:16px;right:16px;font-size:32px}
+              .lightbox-prev{left:16px;top:50%;transform:translateY(-50%)}
+              .lightbox-next{right:16px;top:50%;transform:translateY(-50%)}
               .footer{margin:32px 0 16px;text-align:center;font-size:12px;color:var(--muted)}
             </style></head><body>
             <header class="brand">{$logo}<span class="tag">tickets → merge requests, automated</span></header>
             <div class="wrap">{$body}</div>
             <footer class="footer">Ticket Pilot {$this->e(BundleVersion::pretty())}</footer>
+            <div id="tp-lightbox" class="lightbox" hidden role="dialog" aria-modal="true" aria-label="Screenshot preview">
+              <button type="button" class="lightbox-close" aria-label="Close">&times;</button>
+              <button type="button" class="lightbox-prev" aria-label="Previous" hidden>&lsaquo;</button>
+              <button type="button" class="lightbox-next" aria-label="Next" hidden>&rsaquo;</button>
+              <figure class="lightbox-figure">
+                <img src="" alt="" id="tp-lightbox-img">
+                <figcaption id="tp-lightbox-caption"></figcaption>
+                <a href="" target="_blank" rel="noopener" id="tp-lightbox-link" class="lightbox-link">Open in new tab</a>
+              </figure>
+            </div>
+            <script>
+            (function () {
+              var box = document.getElementById('tp-lightbox');
+              if (!box) return;
+              var img = document.getElementById('tp-lightbox-img');
+              var caption = document.getElementById('tp-lightbox-caption');
+              var link = document.getElementById('tp-lightbox-link');
+              var prev = box.querySelector('.lightbox-prev');
+              var next = box.querySelector('.lightbox-next');
+              var closeBtn = box.querySelector('.lightbox-close');
+              var shots = [];
+              var index = 0;
+
+              function collect() {
+                shots = Array.prototype.slice.call(document.querySelectorAll('.shot-open'));
+              }
+
+              function show(i) {
+                if (!shots.length) return;
+                index = (i + shots.length) % shots.length;
+                var btn = shots[index];
+                var src = btn.getAttribute('data-src') || '';
+                var label = btn.getAttribute('data-caption') || '';
+                img.src = src;
+                img.alt = label;
+                caption.textContent = label;
+                link.href = src;
+                prev.hidden = shots.length < 2;
+                next.hidden = shots.length < 2;
+                box.hidden = false;
+                document.body.style.overflow = 'hidden';
+              }
+
+              function hide() {
+                box.hidden = true;
+                img.removeAttribute('src');
+                document.body.style.overflow = '';
+              }
+
+              document.addEventListener('click', function (e) {
+                var btn = e.target.closest('.shot-open');
+                if (!btn) return;
+                e.preventDefault();
+                collect();
+                var idx = shots.indexOf(btn);
+                show(idx >= 0 ? idx : 0);
+              });
+
+              closeBtn.addEventListener('click', hide);
+              box.addEventListener('click', function (e) {
+                if (e.target === box) hide();
+              });
+              prev.addEventListener('click', function (e) { e.stopPropagation(); show(index - 1); });
+              next.addEventListener('click', function (e) { e.stopPropagation(); show(index + 1); });
+              document.addEventListener('keydown', function (e) {
+                if (box.hidden) return;
+                if (e.key === 'Escape') hide();
+                if (e.key === 'ArrowLeft') show(index - 1);
+                if (e.key === 'ArrowRight') show(index + 1);
+              });
+            })();
+            </script>
             </body></html>
             HTML;
     }
