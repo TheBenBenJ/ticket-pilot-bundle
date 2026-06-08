@@ -7,6 +7,7 @@ namespace TheBenBenJ\TicketPilotBundle\Controller;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use TheBenBenJ\TicketPilotBundle\Run\RunRecord;
+use TheBenBenJ\TicketPilotBundle\Run\RunScreenshotPersister;
 use TheBenBenJ\TicketPilotBundle\Run\RunStoreInterface;
 
 /**
@@ -22,8 +23,7 @@ final class RunIngestController
     public function __construct(
         private readonly RunStoreInterface $store,
         private readonly string $token,
-        private readonly string $screenshotsDir = '',
-        private readonly string $screenshotsBaseUrl = '',
+        private readonly RunScreenshotPersister $screenshotPersister,
     ) {
     }
 
@@ -42,11 +42,16 @@ final class RunIngestController
         $files = $data['_files'] ?? null;
         unset($data['_files']);
 
+        $runId = (string) ($data['id'] ?? bin2hex(random_bytes(6)));
         $fallback = array_values(array_filter(array_map('strval', (array) ($data['screenshots'] ?? [])), static fn (string $s): bool => '' !== $s));
 
-        if (\is_array($files) && [] !== $files && '' !== $this->screenshotsDir) {
-            $urls = $this->saveScreenshots($files, (string) ($data['id'] ?? bin2hex(random_bytes(6))));
-            $data['screenshots'] = [] !== $urls ? $urls : $fallback;
+        $urls = $this->screenshotPersister->persist(
+            $runId,
+            $fallback,
+            \is_array($files) ? $this->normalizeFiles($files) : null,
+        );
+        if ([] !== $urls) {
+            $data['screenshots'] = $urls;
         }
 
         $this->store->record(RunRecord::fromArray($data));
@@ -55,36 +60,24 @@ final class RunIngestController
     }
 
     /**
-     * Saves the base64 screenshots under <screenshots_dir>/<runId>/ and returns
-     * their public URLs.
-     *
      * @param array<mixed> $files
      *
-     * @return list<string>
+     * @return list<array{name: string, data: string}>
      */
-    private function saveScreenshots(array $files, string $runId): array
+    private function normalizeFiles(array $files): array
     {
-        $runId = preg_replace('/[^A-Za-z0-9_-]/', '', $runId) ?: 'run';
-        $dir = rtrim($this->screenshotsDir, '/').'/'.$runId;
-        if (!is_dir($dir) && !@mkdir($dir, 0o777, true) && !is_dir($dir)) {
-            return [];
-        }
-
-        $urls = [];
+        $out = [];
         foreach ($files as $file) {
             if (!\is_array($file) || !isset($file['name'], $file['data'])) {
                 continue;
             }
-            $name = basename((string) $file['name']);
             $raw = base64_decode((string) $file['data'], true);
-            if (false === $raw || '' === $name) {
+            if (false === $raw) {
                 continue;
             }
-            if (false !== file_put_contents($dir.'/'.$name, $raw)) {
-                $urls[] = rtrim($this->screenshotsBaseUrl, '/').'/'.rawurlencode($runId).'/'.rawurlencode($name);
-            }
+            $out[] = ['name' => (string) $file['name'], 'data' => $raw];
         }
 
-        return $urls;
+        return $out;
     }
 }

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace TheBenBenJ\TicketPilotBundle\Controller;
 
+use TheBenBenJ\TicketPilotBundle\BundleVersion;
 use TheBenBenJ\TicketPilotBundle\Run\RunRecord;
 
 /**
@@ -168,27 +169,30 @@ final class DashboardRenderer
             return '';
         }
 
-        // Bare names (older runs, or shots only attached to the ticket and not
-        // web-served): we can't display them, so just list them.
-        if (!$this->isViewable($screenshots[0])) {
-            $items = '';
-            foreach ($screenshots as $shot) {
-                $items .= '<li>'.$this->e(basename($shot)).'</li>';
+        $gallery = '';
+        $missing = '';
+        foreach ($screenshots as $i => $shot) {
+            if ($this->isViewable($shot)) {
+                $name = $this->e($this->shotLabel($shot, $i));
+                $src = $this->e($shot);
+                $gallery .= '<figure class="shot"><a href="'.$src.'" target="_blank" rel="noopener">'
+                    .'<img src="'.$src.'" alt="'.$name.'" loading="lazy"></a>'
+                    .'<figcaption>'.$name.'</figcaption></figure>';
+                continue;
             }
 
-            return '<details open><summary>Screenshots (attached to the ticket)</summary><ul>'.$items.'</ul></details>';
+            $missing .= '<li>'.$this->e(basename($shot)).'</li>';
         }
 
-        $items = '';
-        foreach ($screenshots as $i => $shot) {
-            $name = $this->e($this->shotLabel($shot, $i));
-            $src = $this->e($shot);
-            $items .= '<figure class="shot"><a href="'.$src.'" target="_blank" rel="noopener">'
-                .'<img src="'.$src.'" alt="'.$name.'" loading="lazy"></a>'
-                .'<figcaption>'.$name.'</figcaption></figure>';
+        $html = '';
+        if ('' !== $gallery) {
+            $html .= '<div class="shots">'.$gallery.'</div>';
+        }
+        if ('' !== $missing) {
+            $html .= '<details'.('' === $gallery ? ' open' : '').'><summary>Screenshots (not web-served)</summary><ul>'.$missing.'</ul></details>';
         }
 
-        return '<div class="shots">'.$items.'</div>';
+        return $html;
     }
 
     private function isViewable(string $shot): bool
@@ -443,9 +447,11 @@ final class DashboardRenderer
               .shots img{width:240px;height:150px;object-fit:cover;border:1px solid var(--border);border-radius:8px;display:block;transition:transform .1s ease,border-color .1s ease}
               .shots a:hover img{transform:scale(1.02);border-color:var(--green)}
               .shots figcaption{font-size:11px;color:var(--muted);margin-top:4px;word-break:break-all}
+              .footer{margin:32px 0 16px;text-align:center;font-size:12px;color:var(--muted)}
             </style></head><body>
             <header class="brand">{$logo}<span class="tag">tickets → merge requests, automated</span></header>
             <div class="wrap">{$body}</div>
+            <footer class="footer">Ticket Pilot {$this->e(BundleVersion::pretty())}</footer>
             </body></html>
             HTML;
     }

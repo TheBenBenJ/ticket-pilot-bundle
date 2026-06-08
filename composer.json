@@ -56,6 +56,9 @@
         "test": "phpunit",
         "check": ["@cs", "@stan", "@test"]
     },
+    "extra": {
+        "version": "0.10.3"
+    },
     "config": {
         "sort-packages": true,
         "allow-plugins": {

@@ -47,7 +47,7 @@ final class HttpRunStoreTest extends TestCase
         $this->expectNotToPerformAssertions();
     }
 
-    public function testRecordEmbedsLocalScreenshotsAsDataUris(): void
+    public function testRecordAttachesLocalScreenshotsAsFiles(): void
     {
         $png = sys_get_temp_dir().'/tpb-shot-'.bin2hex(random_bytes(4)).'.png';
         file_put_contents($png, 'PNGBYTES');
@@ -64,11 +64,11 @@ final class HttpRunStoreTest extends TestCase
 
         unlink($png);
 
-        self::assertStringNotContainsString('"_files"', $body);
+        self::assertStringContainsString('"_files"', $body);
         $decoded = json_decode($body, true);
         self::assertIsArray($decoded);
-        self::assertStringStartsWith('data:image/png;base64,', (string) ($decoded['screenshots'][0] ?? ''));
-        self::assertStringContainsString(base64_encode('PNGBYTES'), (string) ($decoded['screenshots'][0] ?? ''));
+        self::assertSame(basename($png), (string) ($decoded['screenshots'][0] ?? ''));
+        self::assertSame(base64_encode('PNGBYTES'), (string) ($decoded['_files'][0]['data'] ?? ''));
     }
 
     public function testRecentIsNotSupportedRemotely(): void

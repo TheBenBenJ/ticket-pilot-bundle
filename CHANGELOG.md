@@ -5,6 +5,19 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.3] - 2026-06-08
+
+### Fixed
+- **CI review screenshots on the dashboard.** `ia:review` now records screenshot file
+  paths (not `data:` URIs). `HttpRunStore` POSTs them as `_files` (base64); the ingest
+  endpoint saves them under `tracking.screenshots_dir` and stores public URLs in the
+  canonical JSONL. Backward-compatible: ingest also accepts legacy `data:` URIs in the
+  payload.
+- **Local runs without `remote_url`.** `TrackedRunStore` persists screenshots to
+  `public/ticket-pilot/screenshots/<runId>/` before appending to the local JSONL.
+- **Dashboard timeline (older runs).** `RunScreenshotResolver` resolves bare filenames
+  against the on-disk screenshot store when rendering a ticket timeline.
+
 ## [0.10.2] - 2026-06-07
 
 ### Fixed

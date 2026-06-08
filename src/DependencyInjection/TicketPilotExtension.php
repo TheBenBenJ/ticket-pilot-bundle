@@ -55,7 +55,10 @@ use TheBenBenJ\TicketPilotBundle\Review\ReviewReportRenderer;
 use TheBenBenJ\TicketPilotBundle\Review\ReviewUrlResolver;
 use TheBenBenJ\TicketPilotBundle\Run\HttpRunStore;
 use TheBenBenJ\TicketPilotBundle\Run\JsonlRunStore;
+use TheBenBenJ\TicketPilotBundle\Run\RunScreenshotPersister;
+use TheBenBenJ\TicketPilotBundle\Run\RunScreenshotResolver;
 use TheBenBenJ\TicketPilotBundle\Run\RunStoreInterface;
+use TheBenBenJ\TicketPilotBundle\Run\TrackedRunStore;
 use TheBenBenJ\TicketPilotBundle\Security\TicketGuard;
 use TheBenBenJ\TicketPilotBundle\Service\AutoDevOptions;
 use TheBenBenJ\TicketPilotBundle\Service\AutoDevRunner;
@@ -105,10 +108,24 @@ final class TicketPilotExtension extends Extension
         $screenshotsDir = $this->resolveProjectPath((string) $config['tracking']['screenshots_dir'], $projectDir);
         $screenshotsBaseUrl = (string) $config['tracking']['screenshots_base_url'];
 
+        $container->setDefinition(RunScreenshotPersister::class, new Definition(RunScreenshotPersister::class, [
+            $screenshotsDir,
+            $screenshotsBaseUrl,
+        ]));
+        $container->setDefinition(RunScreenshotResolver::class, new Definition(RunScreenshotResolver::class, [
+            $screenshotsDir,
+            $screenshotsBaseUrl,
+        ]));
+
         // The canonical store is always the local JSONL file (the env that serves
         // the dashboard owns it). The dashboard, the CLI and the ingest endpoint
         // always read/write THIS file.
         $container->setDefinition(JsonlRunStore::class, new Definition(JsonlRunStore::class, [$resolved]));
+
+        $container->setDefinition(TrackedRunStore::class, new Definition(TrackedRunStore::class, [
+            new Reference(JsonlRunStore::class),
+            new Reference(RunScreenshotPersister::class),
+        ]));
 
         // What the runner commands WRITE through: a remote HTTP store when
         // tracking.remote_url is set (throw-away CI containers forward their runs
@@ -124,7 +141,7 @@ final class TicketPilotExtension extends Extension
             ]));
             $container->setAlias(RunStoreInterface::class, HttpRunStore::class)->setPublic(true);
         } else {
-            $container->setAlias(RunStoreInterface::class, JsonlRunStore::class)->setPublic(true);
+            $container->setAlias(RunStoreInterface::class, TrackedRunStore::class)->setPublic(true);
         }
 
         // ia:runs lists the canonical file.
@@ -135,8 +152,7 @@ final class TicketPilotExtension extends Extension
         $ingest = new Definition(RunIngestController::class, [
             new Reference(JsonlRunStore::class),
             $ingestToken,
-            $screenshotsDir,
-            $screenshotsBaseUrl,
+            new Reference(RunScreenshotPersister::class),
         ]);
         $ingest->addTag('controller.service_arguments');
         $ingest->setPublic(true);
@@ -182,6 +198,7 @@ final class TicketPilotExtension extends Extension
             new Reference(JsonlRunStore::class),
             new Reference(DashboardRenderer::class),
             new Reference('router'),
+            new Reference(RunScreenshotResolver::class),
         ]);
         $detail->addTag('controller.service_arguments');
         $detail->setPublic(true);
