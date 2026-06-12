@@ -62,10 +62,6 @@ final class RunScreenshotResolver
             return $encoded[0] ?? $shot;
         }
 
-        if (str_starts_with($shot, 'data:')) {
-            return $shot;
-        }
-
         return $name;
     }
 }

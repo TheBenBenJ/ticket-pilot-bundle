@@ -55,6 +55,9 @@ final class AgentModelCatalog
     }
 
     /**
+     * @param list<string>          $agentNames
+     * @param array<string, string> $agentBinaries agent name => binary
+     *
      * @return array<string, list<string>> agent name => model ids
      */
     public function all(array $agentNames, array $agentBinaries = []): array

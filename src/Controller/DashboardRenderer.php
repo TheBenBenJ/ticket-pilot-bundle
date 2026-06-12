@@ -39,11 +39,11 @@ final class DashboardRenderer
     }
 
     /**
-     * @param list<RunRecord> $runs
-     * @param list<string>    $sources
-     * @param list<string>              $agents
-     * @param string                    $detailUrlTemplate URL with a "__TICKET__" placeholder, linked per ticket
-     * @param array<string, list<string>> $agentModels     Models per agent for the launch forms
+     * @param list<RunRecord>             $runs
+     * @param list<string>                $sources
+     * @param list<string>                $agents
+     * @param string                      $detailUrlTemplate URL with a "__TICKET__" placeholder, linked per ticket
+     * @param array<string, list<string>> $agentModels       Models per agent for the launch forms
      */
     public function page(array $runs, string $launchUrl, bool $canLaunch, array $sources, array $agents, string $defaultSource, string $defaultAgent, string $detailUrlTemplate = '', array $agentModels = []): string
     {

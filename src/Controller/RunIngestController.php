@@ -81,13 +81,37 @@ final class RunIngestController
             if (!\is_array($file) || !isset($file['name'], $file['data'])) {
                 continue;
             }
-            $raw = base64_decode((string) $file['data'], true);
-            if (false === $raw) {
+
+            $raw = $this->decode((string) $file['data']);
+            if ('' === $raw) {
                 continue;
             }
             $out[] = ['name' => (string) $file['name'], 'data' => $raw];
         }
 
         return $out;
+    }
+
+    /**
+     * Tolerant base64 decode: accepts a raw base64 string, a "data:...;base64,xxx"
+     * URI, and base64 with embedded whitespace/newlines. Returns '' on failure.
+     *
+     * Strict decoding (the previous behaviour) silently dropped any payload that
+     * was a data: URI or contained whitespace, which left empty screenshot dirs.
+     */
+    private function decode(string $data): string
+    {
+        if (str_starts_with($data, 'data:')) {
+            $comma = strpos($data, ',');
+            if (false !== $comma) {
+                $data = substr($data, $comma + 1);
+            }
+        }
+
+        $data = preg_replace('/\s+/', '', $data) ?? $data;
+
+        $raw = base64_decode($data, false);
+
+        return false === $raw ? '' : $raw;
     }
 }

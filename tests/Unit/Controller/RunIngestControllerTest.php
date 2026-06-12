@@ -85,6 +85,40 @@ final class RunIngestControllerTest extends TestCase
         @rmdir($dir);
     }
 
+    public function testFileDataAsDataUriOrWhitespaceIsToleratedAndSaved(): void
+    {
+        $dir = sys_get_temp_dir().'/tpb-ingest-'.bin2hex(random_bytes(4));
+        $store = new CapturingStore();
+        $controller = new RunIngestController($store, 'secret', new RunScreenshotPersister($dir, '/ticket-pilot/screenshots'), new RunScenarioPersister('', ''));
+
+        $payload = json_encode([
+            'id' => 'tol01',
+            'type' => 'review',
+            'ticketKey' => 'PROJ-1',
+            'status' => 'passed',
+            '_files' => [
+                // data: URI prefix (rejected by strict base64_decode → used to create empty dirs)
+                ['name' => 'a.png', 'data' => 'data:image/png;base64,'.base64_encode('AAA')],
+                // base64 with embedded newlines/whitespace
+                ['name' => 'b.png', 'data' => chunk_split(base64_encode('BBBB'), 4, "\n")],
+            ],
+        ]);
+        $response = $controller($this->request('secret', (string) $payload));
+
+        self::assertSame(201, $response->getStatusCode());
+        self::assertSame([
+            '/ticket-pilot/screenshots/tol01/a.png',
+            '/ticket-pilot/screenshots/tol01/b.png',
+        ], $store->records[0]->screenshots);
+        self::assertSame('AAA', file_get_contents($dir.'/tol01/a.png'));
+        self::assertSame('BBBB', file_get_contents($dir.'/tol01/b.png'));
+
+        unlink($dir.'/tol01/a.png');
+        unlink($dir.'/tol01/b.png');
+        @rmdir($dir.'/tol01');
+        @rmdir($dir);
+    }
+
     public function testDataUriScreenshotsAreSavedAndBecomeUrls(): void
     {
         $dir = sys_get_temp_dir().'/tpb-ingest-'.bin2hex(random_bytes(4));

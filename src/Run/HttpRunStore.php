@@ -98,7 +98,7 @@ final class HttpRunStore implements RunStoreInterface
                 continue;
             }
 
-            $ext = match (strtolower((string) ($m[1] ?? ''))) {
+            $ext = match (strtolower((string) $m[1])) {
                 'image/jpeg' => 'jpg',
                 'image/gif' => 'gif',
                 'image/webp' => 'webp',

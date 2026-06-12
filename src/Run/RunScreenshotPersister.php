@@ -20,7 +20,7 @@ final class RunScreenshotPersister
      * Persists screenshots for one run. Accepts local file paths, data: URIs, or
      * pre-built file payloads (name + raw bytes).
      *
-     * @param list<string>           $shots Absolute paths, data: URIs, or bare names (skipped)
+     * @param list<string>                                 $shots Absolute paths, data: URIs, or bare names (skipped)
      * @param list<array{name: string, data: string}>|null $files Base64 payloads from remote ingest
      *
      * @return list<string> Public URL paths (/ticket-pilot/screenshots/…) or empty when disabled
