@@ -338,23 +338,26 @@ final class DashboardRenderer
               <form method="post" action="{$url}">
                 <input type="hidden" name="action" value="auto-dev">
                 <h3>Develop</h3>
-                <input name="ticket" placeholder="Ticket key (e.g. PROJ-123)" required>
+                <input name="ticket" placeholder="Ticket key (optional)">
+                <textarea name="instructions" rows="3" placeholder="Instructions (free text). Required if no ticket: describes what to build."></textarea>
                 {$sourceSelect}{$agentSelect}{$modelSelect}
                 <button type="submit">Run auto-dev</button>
               </form>
               <form method="post" action="{$url}">
                 <input type="hidden" name="action" value="iterate">
                 <h3>Iterate</h3>
-                <input name="ticket" placeholder="Ticket key" required>
-                <input name="branch" placeholder="Branch (optional)">
+                <input name="ticket" placeholder="Ticket key (optional)">
+                <input name="branch" placeholder="Branch (required if no ticket)">
+                <textarea name="instructions" rows="3" placeholder="Change to apply (free text). Required if no ticket."></textarea>
                 {$sourceSelect}{$agentSelect}{$modelSelect}
                 <button type="submit">Iterate on feedback</button>
               </form>
               <form method="post" action="{$url}">
                 <input type="hidden" name="action" value="review">
                 <h3>Review</h3>
-                <input name="ticket" placeholder="Ticket key" required>
-                <input name="url" placeholder="Review app URL (optional)">
+                <input name="ticket" placeholder="Ticket key (optional)">
+                <input name="url" placeholder="App URL (required if no ticket)">
+                <textarea name="instructions" rows="3" placeholder="Scenario to test (free text). Required if no ticket."></textarea>
                 {$sourceSelect}{$agentSelect}{$modelSelect}
                 <button type="submit">Run review</button>
               </form>
@@ -446,8 +449,9 @@ final class DashboardRenderer
               .badge{color:#fff;border-radius:6px;padding:1px 8px;font-size:12px;font-weight:600}
               .forms{display:flex;gap:16px;flex-wrap:wrap}
               form{background:var(--surface);border:1px solid var(--border);border-top:3px solid var(--green);border-radius:10px;padding:14px;display:flex;flex-direction:column;gap:7px;min-width:220px;flex:1}
-              input,select,button{padding:7px 9px;border-radius:7px;border:1px solid var(--border);font:inherit;color:var(--navy)}
-              input:focus,select:focus{outline:2px solid var(--green-bright);border-color:var(--green)}
+              input,select,button,textarea{padding:7px 9px;border-radius:7px;border:1px solid var(--border);font:inherit;color:var(--navy)}
+              textarea{resize:vertical;min-height:54px;font:13px/1.4 ui-monospace,monospace}
+              input:focus,select:focus,textarea:focus{outline:2px solid var(--green-bright);border-color:var(--green)}
               button{background:var(--green);color:#fff;border:0;cursor:pointer;font-weight:600}
               button:hover{background:#018a5b}
               .card{background:var(--surface);border:1px solid var(--border);border-left:4px solid var(--green);border-radius:10px;padding:12px 16px;margin:12px 0}

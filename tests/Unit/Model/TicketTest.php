@@ -39,6 +39,26 @@ final class TicketTest extends TestCase
         self::assertArrayHasKey('linked_tickets', $array);
     }
 
+    public function testAdhocBuildsTicketFromInstructions(): void
+    {
+        $ticket = Ticket::adhoc('adhoc-foo', "Open the planning screen\nCheck the alerts");
+
+        self::assertSame('adhoc-foo', $ticket->key);
+        self::assertSame('Open the planning screen', $ticket->title);
+        self::assertSame("Open the planning screen\nCheck the alerts", $ticket->description);
+        self::assertSame('adhoc', $ticket->source);
+        self::assertFalse($ticket->isBug());
+    }
+
+    public function testAdhocKeyFromLabelAndFromInstructions(): void
+    {
+        // A label is slugified and used directly.
+        self::assertSame('mon-sujet', Ticket::adhocKey('Mon Sujet', 'whatever'));
+        // No label → "adhoc-" + slug of the first line, deterministic.
+        self::assertSame('adhoc-open-the-planning', Ticket::adhocKey(null, "Open the planning\nstep 2"));
+        self::assertSame('adhoc-open-the-planning', Ticket::adhocKey('', "Open the planning\nstep 2"));
+    }
+
     /**
      * @param list<string> $fixVersions
      */

@@ -11,6 +11,7 @@ use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Style\SymfonyStyle;
 use TheBenBenJ\TicketPilotBundle\Exception\TicketLockedException;
+use TheBenBenJ\TicketPilotBundle\Model\Ticket;
 use TheBenBenJ\TicketPilotBundle\Registry\AgentRegistry;
 use TheBenBenJ\TicketPilotBundle\Registry\TicketSourceRegistry;
 use TheBenBenJ\TicketPilotBundle\Run\RunRecord;
@@ -48,6 +49,8 @@ final class AutoDevCommand extends Command
             ->addOption('source', 's', InputOption::VALUE_REQUIRED, 'Ticket source ('.implode(', ', $this->sources->names()).')', $this->defaultSource)
             ->addOption('limit', 'l', InputOption::VALUE_REQUIRED, 'Maximum number of tickets', '1')
             ->addOption('ticket', 't', InputOption::VALUE_REQUIRED, 'Process a specific ticket key')
+            ->addOption('instructions', 'i', InputOption::VALUE_REQUIRED, 'Free-text spec. Without --ticket, develops from this directly (ticket-less); with --ticket, added as a priority directive.')
+            ->addOption('label', null, InputOption::VALUE_REQUIRED, 'Branch/dashboard identifier for a ticket-less run')
             ->addOption('agent', 'a', InputOption::VALUE_REQUIRED, 'Coding agent ('.implode(', ', $this->agents->names()).')', $this->defaultAgent)
             ->addOption('model', 'm', InputOption::VALUE_REQUIRED, 'Agent model override')
             ->addOption('dry-run', null, InputOption::VALUE_NONE, 'List tickets without processing them')
@@ -62,37 +65,44 @@ final class AutoDevCommand extends Command
         $agentName = (string) $input->getOption('agent');
         $model = $input->getOption('model');
         $model = null !== $model ? (string) $model : null;
+        $instructions = (string) ($input->getOption('instructions') ?? '');
+        $explicitTicket = null !== $input->getOption('ticket');
+        // Ticket-less: develop straight from the operator's free-text spec.
+        $adhoc = !$explicitTicket && '' !== trim($instructions);
 
-        if (!$this->sources->has($sourceName)) {
-            $io->error(\sprintf('Unknown source "%s" (available: %s)', $sourceName, implode(', ', $this->sources->names())));
-
-            return Command::INVALID;
-        }
         if (!$this->agents->has($agentName)) {
             $io->error(\sprintf('Unknown agent "%s" (available: %s)', $agentName, implode(', ', $this->agents->names())));
 
             return Command::INVALID;
         }
 
-        $source = $this->sources->get($sourceName);
+        if ($adhoc) {
+            $key = Ticket::adhocKey($input->getOption('label'), $instructions);
+            $tickets = [Ticket::adhoc($key, $instructions)];
+            $source = null;
+            $sourceName = 'adhoc';
+        } else {
+            if (!$this->sources->has($sourceName)) {
+                $io->error(\sprintf('Unknown source "%s" (available: %s)', $sourceName, implode(', ', $this->sources->names())));
 
-        $explicitTicket = null !== $input->getOption('ticket');
-
-        try {
-            if ($explicitTicket) {
-                $tickets = [$source->fetchOne((string) $input->getOption('ticket'))];
-            } else {
-                $tickets = $source->fetchPending((int) $input->getOption('limit'));
+                return Command::INVALID;
             }
-        } catch (\Throwable $e) {
-            $io->error($e->getMessage());
+            $source = $this->sources->get($sourceName);
 
-            return Command::FAILURE;
+            try {
+                $tickets = $explicitTicket
+                    ? [$source->fetchOne((string) $input->getOption('ticket'))]
+                    : $source->fetchPending((int) $input->getOption('limit'));
+            } catch (\Throwable $e) {
+                $io->error($e->getMessage());
+
+                return Command::FAILURE;
+            }
         }
 
         // The auto-pickup path is exposed to anyone who can file/label a ticket, so it is
         // gated by the trusted-reporters allowlist. An explicit --ticket is a human action.
-        if (!$explicitTicket && $this->ticketGuard->isRestricted()) {
+        if (!$explicitTicket && !$adhoc && $this->ticketGuard->isRestricted()) {
             $kept = array_values(array_filter($tickets, fn ($ticket): bool => $this->ticketGuard->isTrusted($ticket)));
             $skipped = \count($tickets) - \count($kept);
             if ($skipped > 0) {
@@ -135,6 +145,7 @@ final class AutoDevCommand extends Command
                     $model,
                     static fn (string $buffer) => $output->write($buffer),
                     $source,
+                    $instructions,
                 );
                 $io->success(\sprintf('MR/PR #%d created: %s', $outcome->mergeRequest->number, $outcome->mergeRequest->url));
                 ++$succeeded;

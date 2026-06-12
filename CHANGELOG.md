@@ -5,6 +5,26 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.12.0] - 2026-06-12
+
+### Added
+- **Free-text instructions on every step, and optional ticket.** `ia:auto-dev`, `ia:iterate`
+  and `ia:review` gained an `--instructions` (`-i`) option, a free-text directive injected into
+  the agent prompt with priority over the ticket. The ticket argument is now **optional**: pass
+  `--instructions` alone to run without a tracker —
+  - `ia:auto-dev -i "build X"` develops from the text (branch from `--label` or an auto slug);
+  - `ia:iterate --branch <b> -i "change Y"` iterates on a branch from the text;
+  - `ia:review --url <u> -i "<scenario>"` tests a free-text scenario on a URL.
+  Ticket-less runs build an ad-hoc ticket (`Ticket::adhoc()` / `Ticket::adhocKey()`), are keyed
+  in the dashboard by `--label` or a deterministic slug, and never report to a tracker.
+- **Dashboard:** each launch form (Develop / Iterate / Review) has an Instructions textarea and an
+  optional ticket field; the controller forwards `IA_INSTRUCTIONS` and keys ticket-less runs by
+  the same ad-hoc slug the CLI derives (so the queued entry and the outcome share a timeline).
+
+### Changed
+- `PromptBuilderInterface::build()` takes an optional `string $instructions = ''` second argument
+  (custom prompt builders must accept it).
+
 ## [0.11.3] - 2026-06-12
 
 ### Fixed

@@ -47,12 +47,34 @@ final class DashboardLaunchControllerTest extends TestCase
         self::assertSame([], $store->records);
     }
 
-    public function testMissingTicketRecordsNothing(): void
+    public function testMissingTicketAndInstructionsRecordsNothing(): void
     {
         $store = new LaunchCapturingStore();
-        $this->controller($store, new FakeTrigger())($this->request(['action' => 'auto-dev', 'ticket' => '']));
+        $response = $this->controller($store, new FakeTrigger())($this->request(['action' => 'auto-dev', 'ticket' => '', 'instructions' => '']));
 
+        self::assertSame(400, $response->getStatusCode());
         self::assertSame([], $store->records);
+    }
+
+    public function testTicketlessLaunchWithInstructionsUsesAdhocKeyAndForwardsInstructions(): void
+    {
+        $store = new LaunchCapturingStore();
+        $trigger = new FakeTrigger();
+        $response = $this->controller($store, $trigger)($this->request([
+            'action' => 'review',
+            'ticket' => '',
+            'url' => 'https://app.test',
+            'instructions' => "Login then open the planning\nCheck the alerts",
+        ]));
+
+        self::assertSame(200, $response->getStatusCode());
+        // Instructions forwarded to CI; no ticket variable.
+        self::assertSame("Login then open the planning\nCheck the alerts", $trigger->lastVariables['IA_INSTRUCTIONS']);
+        self::assertArrayNotHasKey('IA_TICKET', $trigger->lastVariables);
+        self::assertSame('https://app.test', $trigger->lastVariables['IA_URL']);
+        // Queued record keyed by the deterministic ad-hoc key (matches the CI command).
+        self::assertCount(1, $store->records);
+        self::assertStringStartsWith('adhoc-', $store->records[0]->ticketKey);
     }
 
     /**
@@ -66,8 +88,13 @@ final class DashboardLaunchControllerTest extends TestCase
 
 final class FakeTrigger implements PipelineTriggerInterface
 {
+    /** @var array<string, scalar> */
+    public array $lastVariables = [];
+
     public function triggerPipeline(string $ref, array $variables): Pipeline
     {
+        $this->lastVariables = $variables;
+
         return new Pipeline(42, 'http://ci/42', 'pending');
     }
 }

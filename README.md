@@ -304,6 +304,27 @@ php bin/console ia:review PROJ-1234 --url=https://pr-1234.example.com --agent=cl
 php bin/console ia:runs --type=review --limit=20
 ```
 
+### Free-text & ticket-less runs
+
+Every step accepts an `--instructions` (`-i`) free-text directive, and the **ticket is optional** —
+omit it to run purely from the text (no tracker is contacted):
+
+```bash
+# Develop from a free-text spec (branch from --label, or an auto slug)
+php bin/console ia:auto-dev -i "Add a CSV export button on the clients list" --label=clients-csv-export
+
+# Iterate on a branch from free text (no ticket → --branch required)
+php bin/console ia:iterate --branch=feature/clients-csv-export -i "Right-align the new button and add a tooltip"
+
+# Test a free-text scenario on a URL (no ticket → --url required)
+php bin/console ia:review --url=https://staging.example.com -i "Log in, open Clients, click Export CSV, the file downloads"
+
+# With a ticket, --instructions is an extra priority directive on top of the ticket
+php bin/console ia:auto-dev --ticket=PROJ-1234 -i "Reuse App\\Csv\\Writer, do not add a dependency"
+```
+
+The same three actions, with the Instructions field, are available from the dashboard launch forms.
+
 ### HTTP trigger (optional)
 
 When a VCS provider exposing pipelines is enabled, you can trigger a CI pipeline

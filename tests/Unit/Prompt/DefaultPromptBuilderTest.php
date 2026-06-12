@@ -125,6 +125,19 @@ final class DefaultPromptBuilderTest extends TestCase
         }
     }
 
+    public function testOperatorInstructionsAreInjectedWithPriority(): void
+    {
+        $prompt = (new DefaultPromptBuilder())->build($this->ticket(), 'Use the existing FooService, do not add a dependency.');
+
+        self::assertStringContainsString('Operator instructions (PRIORITY)', $prompt);
+        self::assertStringContainsString('Use the existing FooService', $prompt);
+    }
+
+    public function testNoOperatorInstructionsBlockWhenEmpty(): void
+    {
+        self::assertStringNotContainsString('Operator instructions', (new DefaultPromptBuilder())->build($this->ticket()));
+    }
+
     private function ticket(): Ticket
     {
         return new Ticket(

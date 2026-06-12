@@ -57,8 +57,10 @@ final class ReviewCommand extends Command
     protected function configure(): void
     {
         $this
-            ->addArgument('ticket', InputArgument::REQUIRED, 'Ticket key (e.g. LYSI-2098)')
-            ->addOption('url', 'u', InputOption::VALUE_REQUIRED, 'Base URL to test (overrides the configured pattern)')
+            ->addArgument('ticket', InputArgument::OPTIONAL, 'Ticket key (e.g. LYSI-2098). Optional: omit it and pass --instructions to review a free-text scenario.')
+            ->addOption('instructions', 'i', InputOption::VALUE_REQUIRED, 'Free-text scenario to test in the browser (required when no ticket; added as priority scenario otherwise)')
+            ->addOption('label', null, InputOption::VALUE_REQUIRED, 'Identifier for a ticket-less run (dashboard key)')
+            ->addOption('url', 'u', InputOption::VALUE_REQUIRED, 'Base URL to test (overrides the configured pattern; required when no ticket)')
             ->addOption('source', 's', InputOption::VALUE_REQUIRED, 'Ticket source ('.implode(', ', $this->sources->names()).')', $this->defaultSource)
             ->addOption('branch', 'b', InputOption::VALUE_REQUIRED, '[agent] Branch whose merge/pull request gives the development context')
             ->addOption('agent', 'a', InputOption::VALUE_REQUIRED, '[agent] Coding agent driving the review (overrides review.agent)')
@@ -70,33 +72,54 @@ final class ReviewCommand extends Command
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
         $io = new SymfonyStyle($input, $output);
-        $key = (string) $input->getArgument('ticket');
+        $ticketArg = $input->getArgument('ticket');
+        $ticketArg = \is_string($ticketArg) ? $ticketArg : '';
         $sourceName = (string) $input->getOption('source');
+        $instructions = (string) ($input->getOption('instructions') ?? '');
+        $urlOption = (string) ($input->getOption('url') ?? '');
+        $adhoc = '' === $ticketArg;
 
-        if (!$this->sources->has($sourceName)) {
-            $io->error(\sprintf('Unknown source "%s" (available: %s)', $sourceName, implode(', ', $this->sources->names())));
+        if ($adhoc) {
+            // Ticket-less run: the instructions ARE the scenario, tested on --url.
+            if ('' === trim($instructions)) {
+                $io->error('Provide a ticket, or --instructions with a scenario to test.');
 
-            return Command::INVALID;
-        }
+                return Command::INVALID;
+            }
+            if ('' === $urlOption) {
+                $io->error('--url is required when no ticket is given.');
 
-        try {
-            $ticket = $this->sources->get($sourceName)->fetchOne($key);
-            $branch = (string) ($input->getOption('branch') ?? '') ?: $this->branchPlanner->branchName($ticket);
-            $url = $this->urlResolver->resolve($ticket->key, $branch, $input->getOption('url'));
-        } catch (\Throwable $e) {
-            $io->error($e->getMessage());
+                return Command::INVALID;
+            }
+            $ticket = Ticket::adhoc(Ticket::adhocKey($input->getOption('label'), $instructions), $instructions);
+            $branch = (string) ($input->getOption('branch') ?? '');
+            $url = $urlOption;
+        } else {
+            if (!$this->sources->has($sourceName)) {
+                $io->error(\sprintf('Unknown source "%s" (available: %s)', $sourceName, implode(', ', $this->sources->names())));
 
-            return Command::FAILURE;
+                return Command::INVALID;
+            }
+
+            try {
+                $ticket = $this->sources->get($sourceName)->fetchOne($ticketArg);
+                $branch = (string) ($input->getOption('branch') ?? '') ?: $this->branchPlanner->branchName($ticket);
+                $url = $this->urlResolver->resolve($ticket->key, $branch, $input->getOption('url'));
+            } catch (\Throwable $e) {
+                $io->error($e->getMessage());
+
+                return Command::FAILURE;
+            }
         }
 
         $io->section(\sprintf('Reviewing %s on %s', $ticket->key, $url));
 
         return 'agent' === $this->driver
-            ? $this->reviewWithAgent($io, $ticket, $url, $branch, $input)
+            ? $this->reviewWithAgent($io, $ticket, $url, $branch, $instructions, $adhoc, $input)
             : $this->reviewWithRecipe($io, $ticket, $url, $branch, $input);
     }
 
-    private function reviewWithAgent(SymfonyStyle $io, Ticket $ticket, string $url, string $branch, InputInterface $input): int
+    private function reviewWithAgent(SymfonyStyle $io, Ticket $ticket, string $url, string $branch, string $instructions, bool $adhoc, InputInterface $input): int
     {
         if (null === $this->agentRunner) {
             $io->error('The "agent" review driver is not wired (ticket_pilot.review.driver: agent).');
@@ -116,6 +139,7 @@ final class ReviewCommand extends Command
                     $io->write($chunk);
                 },
                 \is_string($agent) ? $agent : null,
+                $instructions,
             );
         } catch (\InvalidArgumentException $e) {
             $io->error($e->getMessage());
@@ -136,7 +160,8 @@ final class ReviewCommand extends Command
             $io->writeln(\sprintf('Screenshots: %s', implode(', ', array_map('basename', $result->screenshots))));
         }
 
-        if (!$input->getOption('no-report')) {
+        // No tracker ticket to report to for an ad-hoc (ticket-less) scenario run.
+        if (!$adhoc && !$input->getOption('no-report')) {
             $source = $this->sources->get((string) $input->getOption('source'));
             if ($source instanceof AgentReviewReporterInterface) {
                 try {

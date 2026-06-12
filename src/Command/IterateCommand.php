@@ -13,6 +13,7 @@ use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Style\SymfonyStyle;
 use TheBenBenJ\TicketPilotBundle\Exception\QualityGateFailedException;
 use TheBenBenJ\TicketPilotBundle\Exception\TicketLockedException;
+use TheBenBenJ\TicketPilotBundle\Model\Ticket;
 use TheBenBenJ\TicketPilotBundle\Registry\AgentRegistry;
 use TheBenBenJ\TicketPilotBundle\Registry\TicketSourceRegistry;
 use TheBenBenJ\TicketPilotBundle\Run\RunRecord;
@@ -47,9 +48,11 @@ final class IterateCommand extends Command
     protected function configure(): void
     {
         $this
-            ->addArgument('ticket', InputArgument::REQUIRED, 'Ticket key (e.g. LYSI-2098)')
+            ->addArgument('ticket', InputArgument::OPTIONAL, 'Ticket key (e.g. LYSI-2098). Optional: omit it and pass --branch + --instructions to iterate from free text.')
+            ->addOption('instructions', 'i', InputOption::VALUE_REQUIRED, 'Free-text change to apply. Required when no ticket; added as a priority directive otherwise.')
+            ->addOption('label', null, InputOption::VALUE_REQUIRED, 'Dashboard identifier for a ticket-less run')
             ->addOption('source', 's', InputOption::VALUE_REQUIRED, 'Ticket source ('.implode(', ', $this->sources->names()).')', $this->defaultSource)
-            ->addOption('branch', 'b', InputOption::VALUE_REQUIRED, 'Branch to iterate on (default: the ticket branch)')
+            ->addOption('branch', 'b', InputOption::VALUE_REQUIRED, 'Branch to iterate on (default: the ticket branch; required when no ticket)')
             ->addOption('agent', 'a', InputOption::VALUE_REQUIRED, 'Coding agent ('.implode(', ', $this->agents->names()).')', $this->defaultAgent)
             ->addOption('model', 'm', InputOption::VALUE_REQUIRED, 'Agent model override')
         ;
@@ -62,27 +65,49 @@ final class IterateCommand extends Command
         $agentName = (string) $input->getOption('agent');
         $model = $input->getOption('model');
         $model = null !== $model ? (string) $model : null;
+        $instructions = (string) ($input->getOption('instructions') ?? '');
+        $branchOption = (string) ($input->getOption('branch') ?? '');
+        $ticketArg = $input->getArgument('ticket');
+        $ticketArg = \is_string($ticketArg) ? $ticketArg : '';
+        $adhoc = '' === $ticketArg;
 
-        if (!$this->sources->has($sourceName)) {
-            $io->error(\sprintf('Unknown source "%s" (available: %s)', $sourceName, implode(', ', $this->sources->names())));
-
-            return Command::INVALID;
-        }
         if (!$this->agents->has($agentName)) {
             $io->error(\sprintf('Unknown agent "%s" (available: %s)', $agentName, implode(', ', $this->agents->names())));
 
             return Command::INVALID;
         }
 
-        try {
-            $source = $this->sources->get($sourceName);
-            $ticket = $source->fetchOne((string) $input->getArgument('ticket'));
-            $branchOption = $input->getOption('branch');
-            $branch = \is_string($branchOption) && '' !== $branchOption ? $branchOption : $this->branchPlanner->branchName($ticket);
-        } catch (\Throwable $e) {
-            $io->error($e->getMessage());
+        if ($adhoc) {
+            if ('' === trim($instructions)) {
+                $io->error('Provide a ticket, or --instructions describing the change to apply.');
 
-            return Command::FAILURE;
+                return Command::INVALID;
+            }
+            if ('' === $branchOption) {
+                $io->error('--branch is required when no ticket is given.');
+
+                return Command::INVALID;
+            }
+            $source = null;
+            $sourceName = 'adhoc';
+            $ticket = Ticket::adhoc(Ticket::adhocKey($input->getOption('label'), $instructions), $instructions);
+            $branch = $branchOption;
+        } else {
+            if (!$this->sources->has($sourceName)) {
+                $io->error(\sprintf('Unknown source "%s" (available: %s)', $sourceName, implode(', ', $this->sources->names())));
+
+                return Command::INVALID;
+            }
+
+            try {
+                $source = $this->sources->get($sourceName);
+                $ticket = $source->fetchOne($ticketArg);
+                $branch = '' !== $branchOption ? $branchOption : $this->branchPlanner->branchName($ticket);
+            } catch (\Throwable $e) {
+                $io->error($e->getMessage());
+
+                return Command::FAILURE;
+            }
         }
 
         $io->section(\sprintf('Iterating on %s (%s)', $ticket->key, $branch));
@@ -95,6 +120,7 @@ final class IterateCommand extends Command
                 $model,
                 static fn (string $buffer) => $output->write($buffer),
                 $source,
+                $instructions,
             );
         } catch (TicketLockedException $e) {
             $io->note($e->getMessage());

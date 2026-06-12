@@ -67,6 +67,7 @@ final class AutoDevRunner
         ?string $model = null,
         ?callable $onOutput = null,
         ?TicketSourceInterface $source = null,
+        string $instructions = '',
     ): AutoDevOutcome {
         $agent = $this->agents->get($agentName);
         $plan = $this->branchPlanner->plan($ticket);
@@ -97,7 +98,7 @@ final class AutoDevRunner
                     }
                 }
 
-                $prompt = $this->promptBuilder->build($ticket);
+                $prompt = $this->promptBuilder->build($ticket, $instructions);
                 $result = $agent->run($prompt, $model, $onOutput);
 
                 // Capture what the agent touched before the commit cleans the tree.

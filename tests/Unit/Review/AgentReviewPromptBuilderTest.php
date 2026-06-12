@@ -85,6 +85,21 @@ final class AgentReviewPromptBuilderTest extends TestCase
         self::assertStringContainsString('never run it with empty arguments', $prompt);
     }
 
+    public function testFreeTextScenarioInstructionsAreInjectedWithPriority(): void
+    {
+        $prompt = (new AgentReviewPromptBuilder())->build(
+            new Ticket('LYSI-7', 't', 'd', 'Task', 'jira'),
+            'https://app.test',
+            '',
+            '',
+            '',
+            'Log in, open the planning, check the alerts banner is shown.',
+        );
+
+        self::assertStringContainsString('Scenario to test (PRIORITY)', $prompt);
+        self::assertStringContainsString('check the alerts banner', $prompt);
+    }
+
     public function testWriteScenarioAddsScenarioBlockInstructions(): void
     {
         $builder = new AgentReviewPromptBuilder(

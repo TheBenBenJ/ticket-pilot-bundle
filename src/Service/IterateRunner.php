@@ -61,6 +61,7 @@ final class IterateRunner
         ?string $model = null,
         ?callable $onOutput = null,
         ?TicketSourceInterface $source = null,
+        string $instructions = '',
     ): IterationOutcome {
         $agent = $this->agents->get($agentName);
 
@@ -77,7 +78,7 @@ final class IterateRunner
             $this->git->checkoutBranch($branch);
 
             $feedback = $this->gatherFeedback($ticket, $branch);
-            $prompt = $this->promptBuilder->build($ticket, $branch, $feedback, $this->mergeRequestDescription($branch));
+            $prompt = $this->promptBuilder->build($ticket, $branch, $feedback, $this->mergeRequestDescription($branch), $instructions);
 
             $started = microtime(true);
             $result = $agent->run($prompt, $model, $onOutput);

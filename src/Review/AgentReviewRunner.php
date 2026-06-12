@@ -55,6 +55,7 @@ final class AgentReviewRunner
         ?string $model = null,
         ?callable $onOutput = null,
         ?string $agentName = null,
+        string $instructions = '',
     ): AgentReviewResult {
         $name = (null !== $agentName && '' !== $agentName) ? $agentName : $this->agentName;
         if (!$this->agents->has($name)) {
@@ -71,7 +72,7 @@ final class AgentReviewRunner
                 ? $this->mergeRequestReader->mergeRequestDescription($branch)
                 : '';
 
-            $prompt = $this->promptBuilder->build($ticket, $baseUrl, $mergeRequestDescription, $this->login, $this->password);
+            $prompt = $this->promptBuilder->build($ticket, $baseUrl, $mergeRequestDescription, $this->login, $this->password, $instructions);
 
             $this->ensureScreenshotDir();
             $startedAt = time();

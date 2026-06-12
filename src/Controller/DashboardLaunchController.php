@@ -8,6 +8,7 @@ use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
 use TheBenBenJ\TicketPilotBundle\Contract\PipelineTriggerInterface;
+use TheBenBenJ\TicketPilotBundle\Model\Ticket;
 use TheBenBenJ\TicketPilotBundle\Run\RunRecord;
 use TheBenBenJ\TicketPilotBundle\Run\RunStoreInterface;
 
@@ -44,15 +45,16 @@ final class DashboardLaunchController
 
         $action = (string) $request->request->get('action', '');
         $ticket = trim((string) $request->request->get('ticket', ''));
+        $instructions = trim((string) $request->request->get('instructions', ''));
 
         if (!\in_array($action, self::ACTIONS, true)) {
             return new Response($this->renderer->confirmation(\sprintf('Unknown action "%s".', $action), $back), 400);
         }
-        if ('' === $ticket) {
-            return new Response($this->renderer->confirmation('A ticket key is required.', $back), 400);
+        if ('' === $ticket && '' === $instructions) {
+            return new Response($this->renderer->confirmation('Provide a ticket key, or instructions (free text) to run without a ticket.', $back), 400);
         }
 
-        $variables = $this->variables($action, $ticket, $request);
+        $variables = $this->variables($action, $ticket, $instructions, $request);
 
         try {
             $pipeline = $this->pipelineTrigger->triggerPipeline($this->defaultRef, $variables);
@@ -60,12 +62,16 @@ final class DashboardLaunchController
             return new Response($this->renderer->confirmation('Failed to launch: '.$e->getMessage(), $back), 502);
         }
 
+        // Dashboard key: the ticket, or the same ad-hoc key the CI command derives
+        // from the instructions, so the queued entry and the outcome share a timeline.
+        $key = '' !== $ticket ? $ticket : Ticket::adhocKey(null, $instructions);
+
         // Best-effort: record a "queued" run on the dashboard env so it shows up
         // immediately; the CI job adds the outcome record when it finishes.
         try {
             $this->store?->record(RunRecord::create(
                 $action,
-                $ticket,
+                $key,
                 RunRecord::STATUS_QUEUED,
                 (string) ($variables['IA_BRANCH'] ?? ''),
                 \sprintf('Launched from the dashboard (pipeline #%d).', $pipeline->id),
@@ -77,7 +83,7 @@ final class DashboardLaunchController
         }
 
         return new Response($this->renderer->confirmation(
-            \sprintf('%s launched for %s (pipeline #%d).', $action, $ticket, $pipeline->id),
+            \sprintf('%s launched for %s (pipeline #%d).', $action, $key, $pipeline->id),
             $back,
             $pipeline->url,
         ));
@@ -86,7 +92,7 @@ final class DashboardLaunchController
     /**
      * @return array<string, string>
      */
-    private function variables(string $action, string $ticket, Request $request): array
+    private function variables(string $action, string $ticket, string $instructions, Request $request): array
     {
         $source = (string) $request->request->get('source', $this->defaultSource);
         $agent = (string) $request->request->get('agent', $this->defaultAgent);
@@ -95,6 +101,7 @@ final class DashboardLaunchController
             'IA_ENABLE' => 'true',
             'IA_MODE' => $action,
             'IA_TICKET' => $ticket,
+            'IA_INSTRUCTIONS' => $instructions,
             'IA_SOURCE' => '' !== $source ? $source : $this->defaultSource,
             'IA_AGENT' => '' !== $agent ? $agent : $this->defaultAgent,
             'IA_MODEL' => trim((string) $request->request->get('model', '')),

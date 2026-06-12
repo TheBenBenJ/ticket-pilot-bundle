@@ -50,6 +50,7 @@ final class AgentReviewPromptBuilder
         string $mergeRequestDescription = '',
         string $login = '',
         string $password = '',
+        string $instructions = '',
     ): string {
         $parts = [$this->preamble()];
 
@@ -58,6 +59,14 @@ final class AgentReviewPromptBuilder
             $ticket->key,
             $baseUrl,
         );
+
+        if ('' !== trim($instructions)) {
+            $parts[] = "## Scenario to test (PRIORITY)\n"
+                .'The operator gave this explicit scenario to run in the browser. Execute it step by '
+                .'step on the app above, take a screenshot at each meaningful step, and base your '
+                ."verdict on it (it takes priority over the inferred ticket scenario):\n\n"
+                .trim($instructions);
+        }
 
         $parts[] = $this->scope();
         $parts[] = $this->businessContext($ticket, $mergeRequestDescription);

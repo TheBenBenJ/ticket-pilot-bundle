@@ -55,6 +55,46 @@ final readonly class Ticket
     }
 
     /**
+     * Builds an ad-hoc ticket from a free-text directive, for runs launched
+     * without a tracker ticket (the instructions ARE the spec / scenario).
+     *
+     * @param string $key          Identifier used for the branch name and the dashboard
+     * @param string $instructions The operator's free-text spec/scenario
+     * @param bool   $bug          Route to the hotfix flow instead of feature
+     */
+    public static function adhoc(string $key, string $instructions, bool $bug = false): self
+    {
+        $firstLine = trim((string) strtok(trim($instructions), "\n"));
+        $title = '' !== $firstLine ? mb_substr($firstLine, 0, 80) : $key;
+
+        return new self(
+            $key,
+            $title,
+            trim($instructions),
+            $bug ? 'bug' : 'Task',
+            'adhoc',
+        );
+    }
+
+    /**
+     * Branch-/dashboard-safe identifier for an ad-hoc run: a slug of the provided
+     * label, or "adhoc-<slug of the first instruction line>" when no label is given.
+     */
+    public static function adhocKey(?string $label, string $instructions): string
+    {
+        $hasLabel = null !== $label && '' !== trim($label);
+        $base = $hasLabel ? (string) $label : (string) (strtok(trim($instructions), "\n") ?: '');
+        $slug = strtolower(preg_replace('/[^A-Za-z0-9]+/', '-', $base) ?? '');
+        $slug = trim(mb_substr($slug, 0, 40), '-');
+
+        if ('' === $slug) {
+            return 'adhoc-'.bin2hex(random_bytes(3));
+        }
+
+        return $hasLabel ? $slug : 'adhoc-'.$slug;
+    }
+
+    /**
      * Whether the ticket describes a defect (bug / anomaly) rather than a feature.
      *
      * @param list<string> $bugTypes Lower-cased type labels considered as bugs

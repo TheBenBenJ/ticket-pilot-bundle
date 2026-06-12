@@ -14,5 +14,9 @@ use TheBenBenJ\TicketPilotBundle\Model\Ticket;
  */
 interface PromptBuilderInterface
 {
-    public function build(Ticket $ticket): string;
+    /**
+     * @param string $instructions Optional free-text directive from the operator,
+     *                             injected with priority over the ticket description
+     */
+    public function build(Ticket $ticket, string $instructions = ''): string;
 }

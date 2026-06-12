@@ -36,9 +36,15 @@ final class IteratePromptBuilder
     /**
      * @param list<string> $feedback Reviewer feedback to address (ticket + merge request comments)
      */
-    public function build(Ticket $ticket, string $branch, array $feedback, string $mergeRequestDescription = ''): string
+    public function build(Ticket $ticket, string $branch, array $feedback, string $mergeRequestDescription = '', string $instructions = ''): string
     {
         $parts = [$this->preamble($ticket, $branch)];
+
+        if ('' !== trim($instructions)) {
+            $parts[] = "## Operator instructions (PRIORITY)\n"
+                ."The human operator gave these explicit instructions for this iteration. Follow them first:\n\n"
+                .trim($instructions);
+        }
 
         $parts[] = "## Title\n".$this->fence('title', $ticket->title);
 
